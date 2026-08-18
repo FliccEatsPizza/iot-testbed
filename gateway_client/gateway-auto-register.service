@@ -1,0 +1,22 @@
+[Unit]
+Description=Gateway Auto Registration Service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+User=pi
+Group=pi
+ExecStart=/home/pi/gateway_client/gateway_startup.sh
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=300
+
+# Restart policy
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

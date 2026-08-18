@@ -1,0 +1,168 @@
+---
+title: Job Group Management API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The Job Group Management module lets users batch jobs across devices, monitor queue status, and cancel or inspect job groups. All endpoints are under the `/api/v1/job-groups` prefix and require authentication.
+
+### Create a Job Group
+
+**POST** `/api/v1/job-groups`
+
+**Description:** Enqueue a batch of jobs. Each job will trigger a background task to notify gateways for file download.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Request Body:** `JobGroupCreate`
+<PropsTable
+  props={[
+    { name: 'name', type: 'string', description: 'Job group name.' },
+    { name: 'jobs', type: 'array of objects', description: 'Jobs array as defined above.' },
+  ]}
+/>
+
+**Response:** `200 OK` (`JobGroupSchema`)
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Created job group ID.' },
+    { name: 'name', type: 'string', description: 'Job group name.' },
+    { name: 'status', type: 'string', description: 'Initial status `preparing`.' },
+    { name: 'created_at', type: 'string', description: 'Creation timestamp.' },
+    { name: 'jobs', type: 'array', description: 'List of jobs with their IDs and initial statuses.' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if no jobs provided or devices not found.
+
+### Get Queue Status
+
+**GET** `/api/v1/job-groups/queue`
+
+**Description:** Fetch all pending job groups for the user, along with device readiness.
+
+**Response:** `200 OK` (array of objects)
+<PropsTable
+  props={[
+    { name: 'group_id', type: 'number', description: 'Job group ID.' },
+    { name: 'name', type: 'string', description: 'Job group name.' },
+    { name: 'created_at', type: 'string', description: 'Creation timestamp.' },
+    { name: 'devices', type: 'array of objects', description: 'Devices in group with their statuses.' },
+    { name: 'ready_to_run', type: 'boolean', description: 'True if all devices are available.' },
+  ]}
+/>
+
+Each device object:
+<PropsTable
+  props={[
+    { name: 'device_id', type: 'number', description: 'ID of the device.' },
+    { name: 'name', type: 'string', description: 'Device name.' },
+    { name: 'status', type: 'string', description: 'Current device status.' },
+  ]}
+/>
+
+**Errors:**
+- `404 Not Found` if retrieval fails.
+
+### List Job Groups
+
+**GET** `/api/v1/job-groups`
+
+**Description:** Retrieve a paginated list of job groups created by the user.
+
+**Query Parameters:**
+<PropsTable
+  props={[
+    { name: 'skip', type: 'number', description: 'Offset of records (default 0).' },
+    { name: 'limit', type: 'number', description: 'Max records to return (default 100).' },
+  ]}
+/>
+
+**Response:** `200 OK` (array of `JobGroupSchema`)
+
+**Errors:**
+- `404 Not Found` if pagination parameters are invalid.
+
+### Get a Job Group
+
+**GET** `/api/v1/job-groups/{group_id}`
+
+**Description:** Fetch detailed information for a specific job group.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'group_id', type: 'number', description: 'ID of the job group.' },
+  ]}
+/>
+
+**Response:** `200 OK` (`JobGroupSchema`)
+
+**Errors:**
+- `404 Not Found` if job group not found.
+
+### Cancel a Job Group
+
+**PUT** `/api/v1/job-groups/{group_id}/cancel`
+
+**Description:** Cancel all pending or running jobs in the group.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'group_id', type: 'number', description: 'ID of the job group to cancel.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation, e.g., "Job group cancelled".' },
+  ]}
+/>
+
+**Errors:**
+- `404 Not Found` if group not found.
+- `400 Bad Request` if group already completed.
+
+### Get Job Group Status
+
+**GET** `/api/v1/job-groups/{group_id}/status`
+
+**Description:** Retrieve aggregated status of jobs within a group.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'group_id', type: 'number', description: 'ID of the job group.' },
+  ]}
+/>
+
+**Response:** `200 OK` (object)
+<PropsTable
+  props={[
+    { name: 'group_status', type: 'string', description: 'Current group status.' },
+    { name: 'job_stats', type: 'object', description: 'Counts of jobs by status.' },
+    { name: 'created_at', type: 'string', description: 'Group creation timestamp.' },
+    { name: 'started_at', type: 'string | null', description: 'Execution start timestamp.' },
+    { name: 'completed_at', type: 'string | null', description: 'Execution completion timestamp.' },
+    { name: 'devices', type: 'array of objects', description: 'List of devices and their statuses.' },
+  ]}
+/>
+
+Details of `job_stats`:
+<PropsTable
+  props={[
+    { name: 'total', type: 'number', description: 'Total number of jobs.' },
+    { name: 'pending', type: 'number', description: 'Jobs pending.' },
+    { name: 'running', type: 'number', description: 'Jobs running.' },
+    { name: 'completed', type: 'number', description: 'Jobs completed.' },
+    { name: 'cancelled', type: 'number', description: 'Jobs cancelled.' },
+    { name: 'failed', type: 'number', description: 'Jobs failed.' },
+  ]}
+/>
+
+Each device object same as in queue.
+
+---

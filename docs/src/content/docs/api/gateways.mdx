@@ -1,0 +1,121 @@
+---
+title: Gateway Management API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The Gateway Management module handles registration, verification, heartbeats, and file download for gateways. All endpoints are under the `/api/v1/gateways` prefix.
+
+### Create a Gateway
+
+**POST** `/api/v1/gateways`
+
+**Description:** Register a new gateway and receive a one-time registration token. Requires authentication.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'name', type: 'string', description: 'Desired gateway name (must be unique).' },
+    { name: 'ip_address', type: 'string', description: 'Optional static IP for the gateway.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'name', type: 'string', description: 'Confirmed gateway name.' },
+    { name: 'token', type: 'string', description: 'One-time registration token.' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if the name already exists or creation fails.
+
+### Verify a Gateway
+
+**POST** `/api/v1/gateways/register`
+
+**Description:** Verify a gateway using its registration token. Public endpoint (no authentication required).
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'name', type: 'string', description: 'Gateway name.' },
+    { name: 'token', type: 'string', description: 'Registration token issued at creation.' },
+  ]}
+/>
+
+**Response:** `200 OK` (GatewaySchema)
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Gateway ID.' },
+    { name: 'name', type: 'string', description: 'Gateway name.' },
+    { name: 'ip_address', type: 'string | null', description: 'IP address if set.' },
+    { name: 'status', type: 'string', description: 'Current status.' },
+    { name: 'verification_status', type: 'string', description: 'Now set to `verified`.' },
+    { name: 'last_seen', type: 'string', description: 'Timestamp of initial registration.' },
+  ]}
+/>
+
+**Errors:**
+- `404 Not Found` if the gateway name is unknown or token is invalid.
+- `400 Bad Request` if already verified.
+
+### Gateway Heartbeat
+
+**POST** `/api/v1/gateways/{gateway_id}/heartbeat`
+
+**Description:** Send a heartbeat update from the gateway, updating its own and its devices’ statuses.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'gateway_id', type: 'number', description: 'ID of the gateway.' },
+  ]}
+/>
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'active_device_ids', type: 'number[]', description: 'List of device IDs currently active on this gateway.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation message, e.g., "Gateway and devices heartbeat updated".' },
+  ]}
+/>
+
+**Errors:**
+- `404 Not Found` if the gateway does not exist.
+
+### Download File for Gateway
+
+**GET** `/api/v1/gateways/download/{file_id}`
+
+**Description:** Gateways can download files (e.g., firmware) using their registration token header.
+
+**Headers:**
+<PropsTable
+  props={[
+    { name: 'X-Gateway-Token', type: 'string', description: 'Registration token provided at creation.' },
+  ]}
+/>
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'file_id', type: 'number', description: 'ID of the file to download.' },
+  ]}
+/>
+
+**Response:** `200 OK` (binary file stream)
+
+**Errors:**
+- `404 Not Found` if token is invalid or file does not exist.
+
+---

@@ -1,0 +1,154 @@
+---
+title: Device Management API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The Device Management module allows you to create, retrieve, update, and delete devices in the IoT testbed. All endpoints are under the `/api/v1/devices` prefix.
+
+### Create a Device
+
+**POST** `/api/v1/devices`
+
+**Description:** Register a new device under a specific gateway.
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'name', type: 'string', description: 'Name for the new device.' },
+    { name: 'gateway_id', type: 'number', description: 'ID of the gateway to attach the device to.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Assigned device ID.' },
+    { name: 'name', type: 'string', description: 'Device name.' },
+    { name: 'gateway_id', type: 'number', description: 'Gateway ID.' },
+    { name: 'status', type: 'string', description: 'Initial status, default `available`.' },
+    { name: 'last_seen', type: 'string', description: 'Creation timestamp.' },
+  ]}
+/>
+
+**Errors:**
+
+- `400 Bad Request` if the gateway does not exist or creation fails.
+
+### List Devices
+
+**GET** `/api/v1/devices`
+
+**Description:** Retrieve a paginated list of devices.
+
+**Query Parameters:**
+<PropsTable
+  props={[
+    { name: 'skip', type: 'number', description: 'Number of records to skip (default 0).' },
+    { name: 'limit', type: 'number', description: 'Maximum number of records to return (default 100).' },
+  ]}
+/>
+
+**Response:** `200 OK` (array of DeviceSchema)
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Device ID.' },
+    { name: 'name', type: 'string', description: 'Device name.' },
+    { name: 'gateway_id', type: 'number', description: 'Gateway ID.' },
+    { name: 'status', type: 'string', description: 'Device status.' },
+    { name: 'last_seen', type: 'string', description: 'Last heartbeat timestamp.' },
+  ]}
+/>
+
+**Errors:**
+
+- `404 Not Found` if pagination parameters are invalid.
+
+### Get a Device
+
+**GET** `/api/v1/devices/{device_id}`
+
+**Description:** Fetch details for a specific device.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'device_id', type: 'number', description: 'ID of the device to retrieve.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Device ID.' },
+    { name: 'name', type: 'string', description: 'Device name.' },
+    { name: 'gateway_id', type: 'number', description: 'Gateway ID.' },
+    { name: 'status', type: 'string', description: 'Device status.' },
+    { name: 'last_seen', type: 'string', description: 'Last heartbeat timestamp.' },
+  ]}
+/>
+
+**Errors:**
+
+- `404 Not Found` if the device does not exist.
+
+### Update Device Status
+
+**PUT** `/api/v1/devices/{device_id}`
+
+**Description:** Update the status of a device. Automatically updates `last_seen` timestamp.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'device_id', type: 'number', description: 'ID of the device to update.' },
+  ]}
+/>
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'status', type: 'string', description: 'New status value. One of `offline`, `available`, `busy`.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Device ID.' },
+    { name: 'name', type: 'string', description: 'Device name.' },
+    { name: 'gateway_id', type: 'number', description: 'Gateway ID.' },
+    { name: 'status', type: 'string', description: 'Updated device status.' },
+    { name: 'last_seen', type: 'string', description: 'Updated timestamp.' },
+  ]}
+/>
+
+**Errors:**
+
+- `404 Not Found` if the device does not exist.
+
+### Delete a Device
+
+**DELETE** `/api/v1/devices/{device_id}`
+
+**Description:** Remove a device from the system.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'device_id', type: 'number', description: 'ID of the device to delete.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation message, e.g., "Device deleted".' },
+  ]}
+/>
+
+**Errors:**
+
+- `404 Not Found` if the device does not exist.
+
+---

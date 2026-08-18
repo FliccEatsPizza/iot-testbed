@@ -1,0 +1,175 @@
+---
+title: Job Management API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The Job Management module provides endpoints to list jobs, fetch individual job details, update job status, and handle job logs. All endpoints are under the `/api/v1/jobs` prefix.
+
+### JobStatusUpdate
+<PropsTable
+  props={[
+    { name: 'status', type: 'string', description: 'New job status value.' },
+    { name: 'output_file_id', type: 'number | null', description: 'Optional ID of the output file.' },
+  ]}
+/>
+
+## Endpoints
+
+### List Jobs
+
+**GET** `/api/v1/jobs`
+
+**Description:** Retrieve a paginated list of jobs.
+
+**Query Parameters:**
+<PropsTable
+  props={[
+    { name: 'skip', type: 'number', description: 'Number of records to skip (default 0).' },
+    { name: 'limit', type: 'number', description: 'Maximum number of records to return (default 100).' },
+  ]}
+/>
+
+**Response:** `200 OK` (array of `JobSchema`)
+
+**Errors:**
+- `404 Not Found` if retrieval fails.
+
+### Get a Job
+
+**GET** `/api/v1/jobs/{job_id}`
+
+**Description:** Fetch details of a specific job by its ID.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'job_id', type: 'number', description: 'ID of the job.' },
+  ]}
+/>
+
+**Response:** `200 OK` (`JobSchema`)
+
+**Errors:**
+- `404 Not Found` if job does not exist.
+
+### Update Job Status
+
+**PUT** `/api/v1/jobs/{job_id}/status`
+
+**Description:** Update the status of a job and optionally attach an output file ID.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'job_id', type: 'number', description: 'ID of the job to update.' },
+  ]}
+/>
+
+**Request Body:** `JobStatusUpdate`
+<PropsTable
+  props={[
+    { name: 'status', type: 'string', description: 'New status for the job.' },
+    { name: 'output_file_id', type: 'number | null', description: 'Optional output file ID.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation message, e.g., "Job status updated successfully".' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if job not found or update fails.
+
+### Upload Job Logs
+
+**POST** `/api/v1/jobs/{job_id}/logs`
+
+**Description:** Gateways upload log files for jobs.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'job_id', type: 'number', description: 'ID of the job.' },
+  ]}
+/>
+
+**Headers:**
+<PropsTable
+  props={[
+    { name: 'X-Gateway-Token', type: 'string', description: 'Gateway registration token.' },
+  ]}
+/>
+
+**Request:** `multipart/form-data`
+<PropsTable
+  props={[
+    { name: 'log_file', type: 'binary', description: 'Text log file for the job.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation, e.g., "Logs uploaded successfully".' },
+    { name: 'path', type: 'string', description: 'Server path where log was saved.' },
+  ]}
+/>
+
+**Errors:**
+- `403 Forbidden` if token invalid or not permitted.
+- `404 Not Found` if job not found.
+- `500 Internal Server Error` if file save fails.
+
+### Check Job Log Existence
+
+**GET** `/api/v1/jobs/{job_id}/log`
+
+**Description:** Check whether a job log exists for the authenticated user.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'job_id', type: 'number', description: 'ID of the job.' },
+  ]}
+/>
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'exists', type: 'boolean', description: 'True if log file exists.' },
+    { name: 'path', type: 'string | null', description: 'Path to log if exists, otherwise null.' },
+  ]}
+/>
+
+**Errors:**
+- `403 Forbidden` if user not owner.
+- `404 Not Found` if job not found.
+
+### Download Job Log
+
+**GET** `/api/v1/jobs/{job_id}/log/download`
+
+**Description:** Download the log file for a job.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'job_id', type: 'number', description: 'ID of the job.' },
+  ]}
+/>
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Response:** `200 OK` (binary text stream)
+
+**Errors:**
+- `403 Forbidden` if user not owner.
+- `404 Not Found` if log does not exist.
+
+---

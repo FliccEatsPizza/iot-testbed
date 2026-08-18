@@ -1,0 +1,80 @@
+---
+title: Authentication API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The Authentication module provides endpoints to register, log in, and fetch the current user. All endpoints are under the `/api/v1/auth` prefix.
+
+### Register a New User
+
+**POST** `/api/v1/auth/register`
+
+**Description:** Create a new user account.
+
+**Request Body:**
+<PropsTable
+  props={[
+    { name: 'username', type: 'string', description: 'Desired username.' },
+    { name: 'password', type: 'string', description: 'Desired password.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'User ID.' },
+    { name: 'username', type: 'string', description: 'Registered username.' },
+    { name: 'created_at', type: 'string', description: 'Timestamp of account creation (ISO 8601).' },
+  ]}
+/>
+
+### Log In
+
+**POST** `/api/v1/auth/login`
+
+**Description:** Authenticate user and retrieve a JWT access token.
+
+**Request:** `application/x-www-form-urlencoded`
+<PropsTable
+  props={[
+    { name: 'username', type: 'string', description: 'Username of the account.' },
+    { name: 'password', type: 'string', description: 'User password.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'access_token', type: 'string', description: 'JWT access token to be used for authenticated requests.' },
+    { name: 'token_type', type: 'string', description: "Type of the token (typically 'bearer')." },
+  ]}
+/>
+
+**Errors:**
+
+- `401 Unauthorized` if credentials are invalid.
+
+### Get Current User
+
+**GET** `/api/v1/auth/me`
+
+**Description:** Retrieve the authenticated user’s profile.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+<PropsTable
+  props={[
+    { name: 'Authorization', type: 'string', description: 'Bearer token in header.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'User ID.' },
+    { name: 'username', type: 'string', description: 'Username.' },
+    { name: 'created_at', type: 'string', description: 'Account creation timestamp.' },
+  ]}
+/>
+
+---

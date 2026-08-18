@@ -1,0 +1,71 @@
+---
+title: "Introduction & Quick Start"
+---
+
+Welcome to the **IoT Testbed** documentation! This guide will help new users and developers quickly understand the purpose of the testbed, its major components, and how to get everything up and running on their machines.
+
+## What is the IoT Testbed?
+
+The IoT Testbed provides a scalable framework for deploying code ("jobs") to remote devices (dongles) via gateway Raspberry Pis, all managed from a central server. It supports:
+
+* **Secure device registration** and status tracking
+* **Bulk job submission** and monitoring via Job Groups
+* **Heartbeat** and health monitoring of gateways and devices
+
+Whether you’re a researcher running experiments or a developer integrating new hardware, this testbed streamlines device management and job execution.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+* **Git** installed (to clone the repository)
+* **Docker** installed (to setup the containers) 
+* One or more **Raspberry Pi** gateways with the gateway client code
+* Programmable **NRF Dongles**
+
+## Quick Start Example
+
+Follow these steps to see the testbed in action:
+
+1. **Clone the repo**
+
+   ```bash
+   git clone https://github.com/UmeshKonduru/iot_testbed_dep.git
+   cd iot_testbed_dep
+   ```
+
+2. **Get the containers running**
+
+   ```bash
+   docker compose up -d --build
+   ```
+
+3. **Configure gateway**
+
+   On each Raspberry Pi, clone the gateway client:
+
+   ```bash
+   git clone https://github.com/UmeshKonduru/gateway_client.git
+   cd gateway_client
+   activate_env
+   python gateway_client.py
+   ```
+
+4. **Register a gateway**
+
+   In the server UI, request a new gateway registration token and run:
+
+   ```bash
+   python gateway_registration.py
+   ```
+
+5. **Add a device**
+
+   ```bash
+   python gateway_add_device.py
+   ```
+
+---
+
+You’re now ready to explore the **User Guide**, **Developer Guide**, and **API Reference** sections for detailed instructions and examples.
+

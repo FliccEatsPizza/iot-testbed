@@ -1,0 +1,107 @@
+---
+title: File Management API
+---
+
+import { PropsTable } from '../components/DocComponents';
+
+The File Management module handles uploading, listing, downloading, and deleting user files. All endpoints are under the `/api/v1/files` prefix and require authentication via a Bearer token.
+
+### Upload a File
+
+**POST** `/api/v1/files/upload`
+
+**Description:** Upload a new file for the authenticated user.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Request:** `multipart/form-data`
+<PropsTable
+  props={[
+    { name: 'file', type: 'binary', description: 'File to upload' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'Assigned file ID.' },
+    { name: 'filename', type: 'string', description: 'Uploaded filename.' },
+    { name: 'path', type: 'string', description: 'Storage path on the server.' },
+    { name: 'user_id', type: 'number', description: 'Uploader user ID.' },
+    { name: 'created_at', type: 'string', description: 'Upload timestamp.' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if upload fails or invalid file.
+
+### List User Files
+
+**GET** `/api/v1/files`
+
+**Description:** Retrieve a list of all files uploaded by the authenticated user.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Response:** `200 OK` (array of FileSchema)
+<PropsTable
+  props={[
+    { name: 'id', type: 'number', description: 'File ID.' },
+    { name: 'filename', type: 'string', description: 'Filename.' },
+    { name: 'path', type: 'string', description: 'Server path.' },
+    { name: 'user_id', type: 'number', description: 'Uploader ID.' },
+    { name: 'created_at', type: 'string', description: 'Upload timestamp.' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if retrieval fails.
+
+### Download a File
+
+**GET** `/api/v1/files/{file_id}/download`
+
+**Description:** Download the specified file if it belongs to the authenticated user.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'file_id', type: 'number', description: 'ID of the file to download.' },
+  ]}
+/>
+
+**Response:** `200 OK` (binary file stream)
+
+**Errors:**
+- `400 Bad Request` if download fails.
+- `404 Not Found` if file does not exist or does not belong to user.
+
+### Delete a File
+
+**DELETE** `/api/v1/files/{file_id}`
+
+**Description:** Delete the specified file if it belongs to the authenticated user.
+
+**Authentication:** Requires `Authorization: Bearer <access_token>` header.
+
+**Path Parameters:**
+<PropsTable
+  props={[
+    { name: 'file_id', type: 'number', description: 'ID of the file to delete.' },
+  ]}
+/>
+
+**Response:** `200 OK`
+<PropsTable
+  props={[
+    { name: 'message', type: 'string', description: 'Confirmation message, e.g., "File deleted".' },
+  ]}
+/>
+
+**Errors:**
+- `400 Bad Request` if deletion fails.
+- `404 Not Found` if file does not exist or does not belong to user.
+
+---
