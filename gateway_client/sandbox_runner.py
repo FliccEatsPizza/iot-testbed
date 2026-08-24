@@ -6,7 +6,7 @@ from typing import List, Optional
 
 logger = logging.getLogger("sandbox_runner")
 
-SANDBOX_IMAGE = os.getenv("SANDBOX_IMAGE", "ubuntu:22.04")
+SANDBOX_IMAGE = os.getenv("SANDBOX_IMAGE", "gcc:12-slim")
 DOCKER_NETWORK = os.getenv("SANDBOX_NETWORK", "iot-testbed-sandbox")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
 
