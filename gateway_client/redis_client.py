@@ -29,7 +29,7 @@ class RedisClient:
     
     async def get_job(self, gateway_id: int) -> Optional[Dict[str, Any]]:
         queue_key = f"gateway:{gateway_id}:jobs"
-        result = await self._redis.brpop(queue_key, timeout=30)
+        result = await self._redis.brpop(queue_key, timeout=5)
         if result:
             _, job_data = result
             return json.loads(job_data)
@@ -48,7 +48,7 @@ class RedisClient:
     
     async def get_download_notification(self, gateway_id: int) -> Optional[Dict[str, Any]]:
         queue_key = f"gateway:{gateway_id}:download_notifications"
-        result = await self._redis.brpop(queue_key, timeout=30)
+        result = await self._redis.brpop(queue_key, timeout=5)
         if result:
             _, notification_data = result
             return json.loads(notification_data)

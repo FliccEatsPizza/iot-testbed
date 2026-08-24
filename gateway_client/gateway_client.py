@@ -193,10 +193,7 @@ async def collect_logs(job_id: int, device_id: int):
         log_path = os.path.join(DOWNLOAD_DIR, str(job_id), "logs.txt")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         
-        print_status(job_id, device_id, "⏳ Waiting for device initialization (5s)")
-        await asyncio.sleep(5)
-        
-        # Open serial connection with proper settings
+        # Open serial connection with proper settings immediately to capture boot logs
         reader, writer = await serial_asyncio.open_serial_connection(
             url=port,
             baudrate=115200
