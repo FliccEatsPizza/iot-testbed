@@ -193,11 +193,19 @@ async def collect_logs(job_id: int, device_id: int):
         log_path = os.path.join(DOWNLOAD_DIR, str(job_id), "logs.txt")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
         
-        # Open serial connection with proper settings immediately to capture boot logs
-        reader, writer = await serial_asyncio.open_serial_connection(
-            url=port,
-            baudrate=115200
-        )
+        # Open serial connection with proper settings (retry if port is resetting post-flash)
+        writer = None
+        for attempt in range(10):
+            try:
+                reader, writer = await serial_asyncio.open_serial_connection(
+                    url=port,
+                    baudrate=115200
+                )
+                break
+            except Exception as e:
+                if attempt == 9:
+                    raise
+                await asyncio.sleep(0.5)
         
         # Reset serial buffers
         writer.transport.serial.reset_input_buffer()
