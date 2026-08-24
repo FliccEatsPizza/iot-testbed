@@ -5,7 +5,7 @@ import os
 import json
 
 # Replace with your API server's IP or hostname
-API_BASE_URL = "http://192.168.43.56:8000/api/v1"
+API_BASE_URL = "http://10.152.208.158:8000/api/v1"
 TOKEN_FILE = "/home/pi/.gateway_token"
 
 def save_token(token):

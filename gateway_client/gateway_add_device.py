@@ -6,7 +6,7 @@ import requests
 import serial.tools.list_ports
 
 # Configuration
-SERVER_URL = "http://192.168.43.56:8000"  # Update with your API server address
+SERVER_URL = "http://10.152.208.158:8000"  # Update with your API server address
 API_PREFIX = "/api/v1"
 DEVICE_ENDPOINT = f"{SERVER_URL}{API_PREFIX}/devices"
 GATEWAY_ID = 1  # The gateway's unique ID

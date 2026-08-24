@@ -11,7 +11,7 @@ from datetime import datetime
 # Gateway configuration
 GATEWAY_ID = 1
 GATEWAY_TOKEN = "abcdefgh12345678"
-SERVER_URL = "http://192.168.43.56:8000"
+SERVER_URL = "http://10.152.208.158:8000"
 DOWNLOAD_DIR = "./downloads"
 MAX_CONCURRENT_JOBS = 4
 
