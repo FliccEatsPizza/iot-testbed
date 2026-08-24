@@ -70,10 +70,19 @@ const Dashboard = () => {
           }
         });
 
-        setUsername(response.data.username); // <-- Corrected this line
+        setUsername(response.data.username);
 
-        const dummyJobGroups = []; // Add your dummy job groups here
-        setJobGroups(dummyJobGroups);
+        try {
+          const jgResponse = await axios.get(`${API_BASE_URL}/job-groups/`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          setJobGroups(jgResponse.data || []);
+        } catch (jgErr) {
+          setJobGroups([]);
+        }
 
         setLoading(false);
       } catch (error) {
@@ -90,12 +99,21 @@ const Dashboard = () => {
     window.location.href = `/${path}`;
   };
 
-  const handleRefresh = () => {
-    // Re-fetch data
+  const handleRefresh = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-    }, 800);
+    try {
+      const token = localStorage.getItem('token');
+      const jgResponse = await axios.get(`${API_BASE_URL}/job-groups/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      setJobGroups(jgResponse.data || []);
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
   };
 
   const handleRowClick = (groupId) => {
@@ -297,12 +315,12 @@ const Dashboard = () => {
                     <Table sx={{ minWidth: 650 }}>
                       <TableHead sx={{ backgroundColor: '#fafafa' }}>
                         <TableRow>
-                          {/* <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Name</TableCell>
+                          <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Name</TableCell>
                           <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Status</TableCell>
                           <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Created At</TableCell>
                           <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Started At</TableCell>
                           <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }}>Completed At</TableCell>
-                          <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }} align="center">Actions</TableCell> */}
+                          <TableCell sx={{ fontWeight: 500, color: '#333', py: 2 }} align="center">Actions</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>

@@ -3,20 +3,45 @@ import os
 import aiohttp
 import time
 import subprocess
+from datetime import datetime
+from typing import Dict, Any, List
+
 from redis_client import redis_client
 from gateway_add_device import get_device_port
+from tunslip_manager import tunslip_manager
+from sandbox_runner import run_sandbox_job, cleanup_sandbox
 import serial_asyncio
-from datetime import datetime
 
 # Gateway configuration
-GATEWAY_ID = 1
-GATEWAY_TOKEN = "abcdefgh12345678"
-SERVER_URL = "http://10.152.208.158:8000"
-DOWNLOAD_DIR = "./downloads"
-MAX_CONCURRENT_JOBS = 4
+GATEWAY_ID = int(os.getenv("GATEWAY_ID", "1"))
+GATEWAY_TOKEN = os.getenv("GATEWAY_TOKEN", "abcdefgh12345678")
+SERVER_URL = os.getenv("SERVER_URL", "http://10.152.208.158:8000")
+DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
+MAX_CONCURRENT_JOBS = 6
 
 # Semaphore for concurrent job processing
 job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
+
+# Group-level synchronization state for ordered multi-target execution
+# Structure: group_id -> {
+#   "tunslip_ready": asyncio.Event(),
+#   "nodes_discovered": asyncio.Event(),
+#   "node_ips": list[str],
+#   "has_border_router": bool,
+#   "active_jobs": set[int]
+# }
+group_state: Dict[int, Dict[str, Any]] = {}
+
+def get_or_create_group_state(group_id: int) -> Dict[str, Any]:
+    if group_id not in group_state:
+        group_state[group_id] = {
+            "tunslip_ready": asyncio.Event(),
+            "nodes_discovered": asyncio.Event(),
+            "node_ips": [],
+            "has_border_router": False,
+            "active_jobs": set()
+        }
+    return group_state[group_id]
 
 def print_status(job_id=None, device_id=None, message=""):
     """Helper function for consistent status messages"""
@@ -38,7 +63,8 @@ async def poll_for_download_notifications():
                 )
                 asyncio.create_task(process_job(
                     notification['job_id'],
-                    notification['source_file_id']
+                    notification['source_file_id'],
+                    notification.get('device_type', 'physical')
                 ))
         except Exception as e:
             print_status(message=f"🔴 Download notification error: {str(e)}")
@@ -54,7 +80,7 @@ async def poll_for_job_notifications():
                 print_status(
                     job_id=job_data.get('job_id'),
                     device_id=job_data.get('device_id'),
-                    message="📨 Received job notification"
+                    message=f"📨 Received job notification (type: {job_data.get('device_type', 'physical')})"
                 )
                 asyncio.create_task(handle_job_notification(job_data))
         except Exception as e:
@@ -66,11 +92,76 @@ async def handle_job_notification(job_data: dict):
         try:
             job_id = job_data['job_id']
             device_id = job_data['device_id']
-            print_status(job_id, device_id, "🚀 Starting job processing")
+            group_id = job_data.get('group_id', 0)
+            dtype = job_data.get('device_type', 'physical')
+            peers = job_data.get('sandbox_peers', [])
+            tun_prefix = job_data.get('tun_prefix', 'fd00::1/64')
 
-            # Sequential execution for this job
-            await flash_device(job_id, device_id)
-            await collect_logs(job_id, device_id)
+            g_state = get_or_create_group_state(group_id)
+            g_state["active_jobs"].add(job_id)
+
+            print_status(job_id, device_id, f"🚀 Starting job processing [type={dtype}]")
+
+            # ----------------------------------------------------
+            # 1. BORDER ROUTER EXECUTION PATH
+            # ----------------------------------------------------
+            if dtype == 'border_router':
+                g_state["has_border_router"] = True
+                await flash_device(job_id, device_id)
+                port = get_device_port(device_id)
+                if not port:
+                    raise Exception(f"Border router port for device {device_id} not found")
+
+                print_status(job_id, device_id, f"🌐 Spawning tunslip6 on {port} with prefix {tun_prefix}")
+                br_ip = await tunslip_manager.start_tunslip(port=port, prefix=tun_prefix)
+                print_status(job_id, device_id, f"✅ tunslip6 active. Border router IPv6: {br_ip or 'fd00::1'}")
+                
+                # Signal other jobs in the group that tun0 is ready
+                g_state["tunslip_ready"].set()
+
+                # Discover nodes over the wireless mesh via Border Router HTTP page
+                print_status(job_id, device_id, "🔍 Discovering Contiki-NG wireless nodes via RPL...")
+                node_ips = await tunslip_manager.discover_nodes(br_ip, timeout=30.0)
+                g_state["node_ips"] = node_ips
+                print_status(job_id, device_id, f"🎯 Discovered nodes: {node_ips}")
+                g_state["nodes_discovered"].set()
+
+                # Keep border router running for the duration of the group experiment
+                await asyncio.sleep(65)
+                await tunslip_manager.stop_tunslip()
+                await update_job_status(job_id, "completed")
+
+            # ----------------------------------------------------
+            # 2. VIRTUAL PI SANDBOX EXECUTION PATH
+            # ----------------------------------------------------
+            elif dtype == 'sandbox':
+                # If a border router is present in the group, wait until node discovery completes
+                if g_state["has_border_router"] or not g_state["tunslip_ready"].is_set():
+                    try:
+                        print_status(job_id, device_id, "⏳ Waiting for Border Router & Contiki-NG network setup (up to 30s)...")
+                        await asyncio.wait_for(g_state["nodes_discovered"].wait(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        print_status(job_id, device_id, "⚠️ Network discovery wait timed out, proceeding with sandbox...")
+
+                node_ips = g_state.get("node_ips", [])
+                logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, log_duration=60)
+                await upload_logs_from_string(job_id, logs)
+                await update_job_status(job_id, "completed")
+
+            # ----------------------------------------------------
+            # 3. PHYSICAL CONTIKI-NG / HARDWARE DEVICE PATH
+            # ----------------------------------------------------
+            else:
+                # If a border router is part of this group, wait until tunslip6 is up before flashing
+                if g_state["has_border_router"]:
+                    try:
+                        print_status(job_id, device_id, "⏳ Waiting for Border Router initialization...")
+                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=20.0)
+                    except asyncio.TimeoutError:
+                        pass
+
+                await flash_device(job_id, device_id)
+                await collect_logs(job_id, device_id)
 
             print_status(job_id, device_id, "✅ Job processing completed")
             
@@ -113,7 +204,7 @@ async def download_file(job_id: int, file_id: int) -> str:
         raise
 
 async def compile_source_code(job_id: int):
-    print_status(job_id, message="🔧 Starting compilation")
+    print_status(job_id, message="🔧 Starting compilation on host")
     try:
         source_path = f"./downloads/{job_id}"
         compile_cmd = ["make", f"SRC_DIR={source_path}"]
@@ -134,7 +225,7 @@ async def compile_source_code(job_id: int):
         print_status(job_id, message=f"🔴 Compilation failed: {str(e)}")
         raise
 
-async def process_job(job_id: int, file_id: int):
+async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
     async with job_semaphore:
         try:
             job_dir = os.path.join(DOWNLOAD_DIR, str(job_id))
@@ -142,7 +233,11 @@ async def process_job(job_id: int, file_id: int):
             
             print_status(job_id, message="📁 Creating job directory")
             source_file_path = await download_file(job_id, file_id)
-            await compile_source_code(job_id)
+            
+            # For virtual Sandbox jobs, compilation happens inside Docker container, skip host make
+            if device_type != "sandbox":
+                await compile_source_code(job_id)
+                
             await update_job_status(job_id, "pending")
             
         except Exception as e:
@@ -207,45 +302,36 @@ async def collect_logs(job_id: int, device_id: int):
                     raise
                 await asyncio.sleep(0.5)
         
-        # Reset serial buffers
         writer.transport.serial.reset_input_buffer()
         writer.transport.serial.reset_output_buffer()
         
-        # Toggle DTR/RTS lines to ensure device resets properly after flashing
-        writer.transport.serial.dtr = False  # Data Terminal Ready
-        writer.transport.serial.rts = False  # Request To Send
+        writer.transport.serial.dtr = False
+        writer.transport.serial.rts = False
         await asyncio.sleep(0.5)
         writer.transport.serial.dtr = True
         writer.transport.serial.rts = True
         await asyncio.sleep(1)
         
-        # Send a newline to trigger output from some devices
         writer.write(b'\n')
         await writer.drain()
         
         log_active = False
-        with open(log_path, "w") as f:
+        with open(log_path, "w", encoding="utf-8") as f:
             start_time = time.time()
             print_status(job_id, device_id, "📊 Starting log capture (timeout: 1 minute)")
             
-            while time.time() - start_time < 60:  # 5 minutes timeout
+            while time.time() - start_time < 60:
                 try:
-                    # Read with a short timeout
                     line_bytes = await asyncio.wait_for(reader.readline(), 1.0)
-                    
-                    if not line_bytes:  # Skip empty lines
+                    if not line_bytes:
                         continue
-                        
                     decoded = line_bytes.decode('utf-8', 'ignore').strip()
                     if decoded:
-                        # Write to both file and terminal
                         f.write(decoded + "\n")
                         f.flush()
                         print_status(job_id, device_id, f"📄 {decoded}")
                         log_active = True
-                        
                 except asyncio.TimeoutError:
-                    # Only print waiting message if we've seen output before
                     if log_active:
                         print_status(job_id, device_id, "⏳ No data, waiting...")
                     continue
@@ -265,7 +351,6 @@ async def collect_logs(job_id: int, device_id: int):
         await upload_logs(job_id, log_path)
         await update_job_status(job_id, "completed")
     finally:
-        # Ensure serial connection is closed properly
         try:
             writer.close()
             await writer.wait_closed()
@@ -306,6 +391,15 @@ async def upload_logs(job_id: int, log_path: str):
     except Exception as e:
         print_status(job_id, message=f"🔴 Log upload failed: {str(e)}")
         raise
+
+async def upload_logs_from_string(job_id: int, logs: str):
+    """Saves string logs to file and uploads to server"""
+    job_dir = os.path.join(DOWNLOAD_DIR, str(job_id))
+    os.makedirs(job_dir, exist_ok=True)
+    log_path = os.path.join(job_dir, "logs.txt")
+    with open(log_path, "w", encoding="utf-8") as f:
+        f.write(logs)
+    await upload_logs(job_id, log_path)
 
 async def main():
     print_status(message="🏁 Starting gateway client")

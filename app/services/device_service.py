@@ -16,6 +16,7 @@ class DeviceService:
             name=device.name,
             gateway_id=device.gateway_id,
             status=DeviceStatus.available,
+            device_type=device.device_type,
             last_seen=datetime.now(timezone.utc)
         )
         db.add(db_device)

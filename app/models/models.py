@@ -11,6 +11,11 @@ class DeviceStatus(str, Enum):
     busy = "busy"
     offline = "offline"
 
+class DeviceType(str, Enum):
+    physical = "physical"           # Standard USB-connected Contiki-NG / firmware node
+    border_router = "border_router" # RPL Border Router — USB-connected, runs tunslip6
+    sandbox = "sandbox"             # Virtual Pi Docker Sandbox execution target
+
 class JobStatus(str, Enum):
     preparing = "preparing"
     pending = "pending"
@@ -54,6 +59,7 @@ class Device(Base):
     name = Column(String, unique=True, nullable=False)
     gateway_id = Column(Integer, ForeignKey('gateways.id'), nullable=False)
     status = Column(SQLEnum(DeviceStatus), default=DeviceStatus.available, nullable=False)
+    device_type = Column(SQLEnum(DeviceType), default=DeviceType.physical, nullable=False)
     last_seen = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
 
     gateway = relationship("Gateway", back_populates="devices")

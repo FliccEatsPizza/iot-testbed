@@ -48,20 +48,32 @@ class JobScheduler:
     
     async def dispatch_job_group(self, db: Session, group: JobGroup, jobs: List[Job], devices: List[Device]):
         try:
+            device_map = {d.id: d for d in devices}
             for device in devices:
                 device.status = DeviceStatus.busy
             group.status = JobStatus.running
             group.started_at = datetime.now(timezone.utc)
 
+            # Pre-compute all sandbox peer hostnames in this group
+            sandbox_jobs = [j for j in jobs if device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "sandbox"]
+
             for job in jobs:
                 job.status = JobStatus.running
                 job.started_at = datetime.now(timezone.utc)
+                matching_device = device_map[job.device_id]
+                
+                # Peers for sandbox containers
+                peers = [f"sandbox-job-{sj.id}" for sj in sandbox_jobs if sj.id != job.id]
+                
                 job_data = {
                     "job_id": job.id,
                     "group_id": job.group_id,
-                    "device_id": job.device_id
+                    "device_id": job.device_id,
+                    "device_name": matching_device.name,
+                    "device_type": matching_device.device_type.value,
+                    "tun_prefix": "fd00::1/64",
+                    "sandbox_peers": peers
                 }
-                matching_device = next(device for device in devices if device.id == job.device_id)
                 await redis_client.push_job(matching_device.gateway_id, job_data)
 
             db.commit()

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional
-from ..models.models import DeviceStatus, JobStatus
+from ..models.models import DeviceStatus, DeviceType, JobStatus
 
 # User Schemas
 class UserCreate(BaseModel):
@@ -49,12 +49,14 @@ class GatewayTokenVerify(BaseModel):
 class DeviceCreate(BaseModel):
     name: str = Field(..., max_length=100)
     gateway_id: int
+    device_type: DeviceType = DeviceType.physical
 
 class DeviceSchema(BaseModel):
     id: int
     name: str
     gateway_id: int
     status: DeviceStatus
+    device_type: DeviceType = DeviceType.physical
     last_seen: datetime
 
     class Config:

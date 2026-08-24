@@ -51,7 +51,8 @@ class JobGroupService:
             gateway_id = device.gateway_id
             notification = {
                 "job_id": job.id,
-                "source_file_id": job.source_file_id
+                "source_file_id": job.source_file_id,
+                "device_type": device.device_type.value
             }
             background_tasks.add_task(redis_client.push_download_notification, gateway_id, notification)
         

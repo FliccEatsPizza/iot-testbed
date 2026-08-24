@@ -131,6 +131,18 @@ const JobSubmission = () => {
     return file ? file.filename : 'No file selected';
   };
 
+  const getDeviceTypeChip = (deviceType) => {
+    switch (deviceType) {
+      case 'sandbox':
+        return <Chip label="Sandbox" size="small" sx={{ ml: 1, backgroundColor: '#e8f5e9', color: '#2e7d32', fontWeight: 500, fontSize: '0.7rem' }} />;
+      case 'border_router':
+        return <Chip label="Border Router" size="small" sx={{ ml: 1, backgroundColor: '#fff3e0', color: '#e65100', fontWeight: 500, fontSize: '0.7rem' }} />;
+      case 'physical':
+      default:
+        return <Chip label="Physical" size="small" sx={{ ml: 1, backgroundColor: '#e3f2fd', color: '#1565c0', fontWeight: 500, fontSize: '0.7rem' }} />;
+    }
+  };
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       {/* Navbar */}
@@ -223,26 +235,29 @@ const JobSubmission = () => {
                               }
                             }}
                           >
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  checked={selectedDevices.some((d) => d.device_id === device.id)}
-                                  onChange={() => handleDeviceToggle(device.id)}
-                                  color="primary"
-                                />
-                              }
-                              label={
-                                <Typography
-                                  sx={{
-                                    fontWeight: selectedDevices.some(d => d.device_id === device.id)
-                                      ? 'bold'
-                                      : 'normal'
-                                  }}
-                                >
-                                  {device.name}
-                                </Typography>
-                              }
-                            />
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={selectedDevices.some((d) => d.device_id === device.id)}
+                                    onChange={() => handleDeviceToggle(device.id)}
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography
+                                    sx={{
+                                      fontWeight: selectedDevices.some(d => d.device_id === device.id)
+                                        ? 'bold'
+                                        : 'normal'
+                                    }}
+                                  >
+                                    {device.name}
+                                  </Typography>
+                                }
+                              />
+                              {getDeviceTypeChip(device.device_type)}
+                            </Box>
                           </Paper>
                         </Grid>
                       ))}
