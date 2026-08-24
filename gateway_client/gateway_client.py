@@ -178,6 +178,12 @@ async def download_file(job_id: int, file_id: int) -> str:
         headers = {"X-Gateway-Token": GATEWAY_TOKEN}
         
         job_dir = os.path.join(DOWNLOAD_DIR, str(job_id))
+        if os.path.exists(job_dir):
+            import shutil
+            try:
+                shutil.rmtree(job_dir)
+            except Exception:
+                pass
         os.makedirs(job_dir, exist_ok=True)
         
         async with aiohttp.ClientSession() as session:
