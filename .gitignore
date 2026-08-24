@@ -5,3 +5,10 @@ __pycache__/
 .env.development.local
 .env.test.local
 .env.production.local
+UNDERSTANDING.md
+uploads/
+logs/
+*.db
+gateway_client/gateway_devices.db
+gateway_client/downloads/
+
