@@ -31,6 +31,10 @@ build:
 	@# Create a temporary Makefile in the source directory
 	@echo "CONTIKI_PROJECT = $(shell basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile
 	@echo "all: \$$(CONTIKI_PROJECT)" >> $(SRC_DIR)/build/Makefile
+	@if grep -q "root_start" $(SRC_DIR)/*.c 2>/dev/null || echo "$(SRC_DIR)" | grep -qi "border"; then \
+		echo "MODULES += os/services/rpl-border-router" >> $(SRC_DIR)/build/Makefile; \
+		echo "Added RPL Border Router module to build"; \
+	fi
 	@echo "CONTIKI = $(CONTIKI)" >> $(SRC_DIR)/build/Makefile
 	@echo "include \$$(CONTIKI)/Makefile.include" >> $(SRC_DIR)/build/Makefile
 	@# Copy source files to the build directory

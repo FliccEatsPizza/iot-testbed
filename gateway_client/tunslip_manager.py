@@ -88,6 +88,7 @@ class TunslipManager:
             line = line_bytes.decode('utf-8', errors='ignore').strip()
             if line:
                 self.stdout_lines.append(line)
+                print(f"📡 [tunslip6] {line}")
                 logger.debug(f"[tunslip6] {line}")
                 
                 # Check for address line: e.g. "Server IPv6 addresses:" followed by "fd00::212:4b00:..."
