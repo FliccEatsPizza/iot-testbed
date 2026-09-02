@@ -28,6 +28,8 @@ class TunslipManager:
         search_paths = [
             "./tools/serial-io/tunslip6",
             "./tools/tunslip6",
+            os.path.expanduser("~/Desktop/contiki-ng/tools/serial-io/tunslip6"),
+            os.path.expanduser("~/contiki-ng/tools/serial-io/tunslip6"),
             "../contiki-ng/tools/serial-io/tunslip6",
             "/usr/local/bin/tunslip6",
             "tunslip6"
