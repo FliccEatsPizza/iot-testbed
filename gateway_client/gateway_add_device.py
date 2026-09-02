@@ -6,10 +6,8 @@ import requests
 import serial.tools.list_ports
 
 # Configuration
-SERVER_URL = "http://10.152.208.158:8000"  # Update with your API server address
-API_PREFIX = "/api/v1"
-DEVICE_ENDPOINT = f"{SERVER_URL}{API_PREFIX}/devices"
-GATEWAY_ID = 1  # The gateway's unique ID
+from config import SERVER_URL, API_BASE_URL, GATEWAY_ID
+DEVICE_ENDPOINT = f"{API_BASE_URL}/devices"
 DB_PATH = "gateway_devices.db"  # SQLite database file
 
 def get_device_port(device_id: int) -> str:

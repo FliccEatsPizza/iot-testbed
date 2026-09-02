@@ -2,10 +2,11 @@
 import redis.asyncio as redis
 import json
 from typing import Dict, Any, Optional
+from config import REDIS_URL
 
 class RedisClient:
     def __init__(self):
-        self.redis_url = "redis://10.152.208.158:6379/0"
+        self.redis_url = REDIS_URL
         self._redis = None
 
     async def init(self):

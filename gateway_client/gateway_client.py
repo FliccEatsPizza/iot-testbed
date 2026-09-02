@@ -13,10 +13,7 @@ from sandbox_runner import run_sandbox_job, cleanup_sandbox
 import serial_asyncio
 
 # Gateway configuration
-GATEWAY_ID = int(os.getenv("GATEWAY_ID", "1"))
-GATEWAY_TOKEN = os.getenv("GATEWAY_TOKEN", "abcdefgh12345678")
-SERVER_URL = os.getenv("SERVER_URL", "http://10.152.208.158:8000")
-DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
+from config import GATEWAY_ID, GATEWAY_TOKEN, SERVER_URL, DOWNLOAD_DIR
 MAX_CONCURRENT_JOBS = 6
 
 # Semaphore for concurrent job processing

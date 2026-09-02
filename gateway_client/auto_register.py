@@ -8,7 +8,7 @@ import time
 import logging
 
 # Configuration
-API_BASE_URL = "http://10.152.208.158:8000/api/v1"
+from config import API_BASE_URL
 TOKEN_FILE = "/home/pi/.gateway_token"
 LOG_FILE = "/home/pi/gateway_auto_register.log"
 

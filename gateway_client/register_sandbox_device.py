@@ -1,9 +1,6 @@
 import requests
 import json
-import os
-
-SERVER_URL = os.getenv("SERVER_URL", "http://10.152.208.158:8000")
-GATEWAY_ID = int(os.getenv("GATEWAY_ID", "1"))
+from config import SERVER_URL, GATEWAY_ID
 
 def register_device(name: str, device_type: str, gateway_id: int):
     url = f"{SERVER_URL}/api/v1/devices/"
