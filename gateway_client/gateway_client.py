@@ -109,6 +109,10 @@ async def handle_job_notification(job_data: dict):
                 if not port:
                     raise Exception(f"Border router port for device {device_id} not found")
 
+                # Wait for nRF52840 USB port to re-enumerate after DFU reboot
+                print_status(job_id, device_id, "⏳ Waiting 3s for USB port to re-enumerate after flash...")
+                await asyncio.sleep(3)
+
                 print_status(job_id, device_id, f"🌐 Spawning tunslip6 on {port} with prefix {tun_prefix}")
                 br_ip = await tunslip_manager.start_tunslip(port=port, prefix=tun_prefix)
                 print_status(job_id, device_id, f"✅ tunslip6 active. Border router IPv6: {br_ip or 'fd00::1'}")
