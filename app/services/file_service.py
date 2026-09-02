@@ -40,13 +40,17 @@ class FileService:
     @staticmethod
     def delete_file(db: Session, file_id: int, user_id: int):
         file = FileService.get_file(db, file_id, user_id)
-        # Check if file is tied to previous job runs
-        linked_jobs = db.query(Job).filter((Job.source_file_id == file_id) | (Job.output_file_id == file_id)).all()
-        if linked_jobs:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete '{file.filename}' because it is linked to past job history (e.g. Job #{linked_jobs[0].id})."
-            )
+        # Nullify references in past jobs so deletion is always allowed
+        linked_jobs = db.query(Job).filter(
+            (Job.source_file_id == file_id) | (Job.output_file_id == file_id)
+        ).all()
+        for job in linked_jobs:
+            if job.source_file_id == file_id:
+                job.source_file_id = None
+            if job.output_file_id == file_id:
+                job.output_file_id = None
+        db.flush()
+        # Remove the physical file if it still exists
         if os.path.exists(file.path):
             try:
                 os.remove(file.path)
