@@ -1,7 +1,7 @@
 import os
 from fastapi import UploadFile, HTTPException
 from sqlalchemy.orm import Session
-from ..models.models import File
+from ..models.models import File, Job
 from ..config import settings
 
 class FileService:
@@ -40,7 +40,18 @@ class FileService:
     @staticmethod
     def delete_file(db: Session, file_id: int, user_id: int):
         file = FileService.get_file(db, file_id, user_id)
-        os.remove(file.path)
+        # Check if file is tied to previous job runs
+        linked_jobs = db.query(Job).filter((Job.source_file_id == file_id) | (Job.output_file_id == file_id)).all()
+        if linked_jobs:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete '{file.filename}' because it is linked to past job history (e.g. Job #{linked_jobs[0].id})."
+            )
+        if os.path.exists(file.path):
+            try:
+                os.remove(file.path)
+            except Exception:
+                pass
         db.delete(file)
         db.commit()
 
