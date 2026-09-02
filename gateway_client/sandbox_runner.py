@@ -35,6 +35,7 @@ async def run_sandbox_job(
     device_id: int,
     node_ips: Optional[List[str]] = None,
     peers: Optional[List[str]] = None,
+    br_ip: Optional[str] = None,
     log_duration: int = 60
 ) -> str:
     """
@@ -85,6 +86,7 @@ async def run_sandbox_job(
         "-e", f"CONTIKI_NODES={','.join(node_ips)}",
         "-e", "CONTIKI_PREFIX=fd00::",
         "-e", f"SANDBOX_PEERS={','.join(peers)}",
+        "-e", f"BORDER_ROUTER_IP={br_ip or ''}",
         SANDBOX_IMAGE,
         "bash", "-c", entrypoint_script
     ]

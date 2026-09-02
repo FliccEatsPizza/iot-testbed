@@ -117,6 +117,9 @@ async def handle_job_notification(job_data: dict):
                 br_ip = await tunslip_manager.start_tunslip(port=port, prefix=tun_prefix)
                 print_status(job_id, device_id, f"✅ tunslip6 active. Border router IPv6: {br_ip or 'fd00::1'}")
                 
+                # Store br_ip so sandbox jobs can read it
+                g_state["br_ip"] = br_ip
+
                 # Signal other jobs in the group that tun0 is ready
                 g_state["tunslip_ready"].set()
 
@@ -136,16 +139,18 @@ async def handle_job_notification(job_data: dict):
             # 2. VIRTUAL PI SANDBOX EXECUTION PATH
             # ----------------------------------------------------
             elif dtype == 'sandbox':
-                # If a border router is present in the group, wait until node discovery completes
+                # Wait until tun0 is up (tunslip_ready), giving border router enough time to flash + boot
                 if g_state["has_border_router"] or not g_state["tunslip_ready"].is_set():
                     try:
-                        print_status(job_id, device_id, "⏳ Waiting for Border Router & Contiki-NG network setup (up to 30s)...")
-                        await asyncio.wait_for(g_state["nodes_discovered"].wait(), timeout=30.0)
+                        print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 60s)...")
+                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=60.0)
+                        print_status(job_id, device_id, "🌐 tun0 is ready! Launching sandbox container...")
                     except asyncio.TimeoutError:
-                        print_status(job_id, device_id, "⚠️ Network discovery wait timed out, proceeding with sandbox...")
+                        print_status(job_id, device_id, "⚠️ tun0 wait timed out, proceeding with sandbox...")
 
                 node_ips = g_state.get("node_ips", [])
-                logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, log_duration=60)
+                br_ip = g_state.get("br_ip")
+                logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, br_ip=br_ip, log_duration=60)
                 await upload_logs_from_string(job_id, logs)
                 await update_job_status(job_id, "completed")
 
