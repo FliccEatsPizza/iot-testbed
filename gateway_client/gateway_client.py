@@ -104,7 +104,18 @@ async def handle_job_notification(job_data: dict):
             # ----------------------------------------------------
             if dtype == 'border_router':
                 g_state["has_border_router"] = True
-                await flash_device(job_id, device_id)
+
+                # Detect if job has a pre-built DFU or a compiled .nrf52840 binary
+                job_dir = f"./downloads/{job_id}"
+                all_files = os.listdir(job_dir) if os.path.isdir(job_dir) else []
+                dfu_files = [f for f in all_files if f.endswith('.dfu') or f.endswith('.zip')]
+
+                if dfu_files:
+                    dfu_path = os.path.join(job_dir, dfu_files[0])
+                    await flash_dfu(job_id, device_id, dfu_path)
+                else:
+                    await flash_device(job_id, device_id)
+
                 port = get_device_port(device_id)
                 if not port:
                     raise Exception(f"Border router port for device {device_id} not found")
@@ -246,14 +257,21 @@ async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
             print_status(job_id, message="📁 Creating job directory")
             source_file_path = await download_file(job_id, file_id)
             
-            # For virtual Sandbox jobs, compilation happens inside Docker container, skip host make
-            if device_type != "sandbox":
+            # Determine if this is a pre-built binary (DFU/zip) or source code
+            is_prebuilt = source_file_path and any(
+                source_file_path.endswith(ext) for ext in ('.dfu', '.zip', '.hex', '.bin')
+            )
+
+            # Sandbox compiles inside Docker; pre-built binaries skip host make
+            if device_type != "sandbox" and not is_prebuilt:
                 await compile_source_code(job_id)
+            elif is_prebuilt:
+                print_status(job_id, message=f"📦 Pre-built firmware detected ({os.path.basename(source_file_path)}), skipping compilation")
                 
             await update_job_status(job_id, "pending")
             
         except Exception as e:
-            print_status(job_id, message=f"🔴 Error processing job: {str(e)}")
+            print_status(job_id, message=f"🔴 Error processing job: {str(e)}") 
             await update_job_status(job_id, "failed")
 
 async def flash_device(job_id: int, device_id: int):
@@ -288,6 +306,40 @@ async def flash_device(job_id: int, device_id: int):
     except Exception as e:
         await update_job_status(job_id, "failed")
         print_status(job_id, device_id, f"🔴 Flashing failed: {str(e)}")
+        raise
+
+async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
+    """Flash a pre-built DFU package directly using nrfutil — no compilation needed."""
+    try:
+        print_status(job_id, device_id, f"📦 Flashing pre-built DFU: {os.path.basename(dfu_path)}")
+        port = get_device_port(device_id)
+        if not port:
+            raise Exception(f"Device {device_id} not found")
+
+        flash_cmd = ["nrfutil", "dfu", "usb-serial", "-pkg", dfu_path, "-p", port, "-b", "115200"]
+        proc = await asyncio.create_subprocess_exec(
+            *flash_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=60)
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise Exception("DFU flashing timed out after 60 seconds")
+
+        if proc.returncode != 0:
+            stderr = await proc.stderr.read()
+            stdout = await proc.stdout.read()
+            raise Exception(f"DFU flash failed:\n{stdout.decode()}\n{stderr.decode()}")
+
+        await update_job_status(job_id, "running")
+        print_status(job_id, device_id, "✅ DFU flashing completed successfully")
+
+    except Exception as e:
+        await update_job_status(job_id, "failed")
+        print_status(job_id, device_id, f"🔴 DFU flashing failed: {str(e)}")
         raise
 
 async def collect_logs(job_id: int, device_id: int):
