@@ -47,6 +47,32 @@ def print_status(job_id=None, device_id=None, message=""):
     device_info = f"[Device {device_id}]" if device_id else ""
     print(f"{timestamp} {job_info}{device_info} {message}")
 
+async def detect_border_router_from_tun0() -> "Optional[str]":
+    """
+    When tunslip6 is running externally (manually), detect the border router's
+    global IPv6 address by reading the tun0 IPv6 neighbor table.
+    Returns the first fd00:: address that is NOT fd00::1 (the Pi-side tun0 address).
+    """
+    import re
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ip", "-6", "neigh", "show", "dev", "tun0",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=3.0)
+        lines = stdout.decode().strip().split('\n')
+        ip_re = re.compile(r'(fd00:[0-9a-fA-F:]+)')
+        for line in lines:
+            match = ip_re.search(line)
+            if match:
+                ip = match.group(1).rstrip(':')
+                if ip != 'fd00::1':
+                    return ip
+    except Exception:
+        pass
+    return None
+
 async def poll_for_download_notifications():
     await redis_client.init()
     print_status(message="🚦 Started polling for download notifications")
@@ -150,8 +176,8 @@ async def handle_job_notification(job_data: dict):
             # 2. VIRTUAL PI SANDBOX EXECUTION PATH
             # ----------------------------------------------------
             elif dtype == 'sandbox':
-                # Wait until tun0 is up (tunslip_ready), giving border router enough time to flash + boot
-                if g_state["has_border_router"] or not g_state["tunslip_ready"].is_set():
+                # Only wait for tunslip_ready if THIS job group includes a border_router job
+                if g_state["has_border_router"]:
                     try:
                         print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 60s)...")
                         await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=60.0)
@@ -161,6 +187,15 @@ async def handle_job_notification(job_data: dict):
 
                 node_ips = g_state.get("node_ips", [])
                 br_ip = g_state.get("br_ip")
+
+                # If no border_router job in this group, try to auto-detect a manually-started tunslip6
+                if not br_ip:
+                    br_ip = await detect_border_router_from_tun0()
+                    if br_ip:
+                        print_status(job_id, device_id, f"🔍 Auto-detected border router from tun0: {br_ip}")
+                    else:
+                        print_status(job_id, device_id, "⚠️ No border router IP detected — sandbox will use fd00::1 fallback")
+
                 logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, br_ip=br_ip, log_duration=60)
                 await upload_logs_from_string(job_id, logs)
                 await update_job_status(job_id, "completed")
