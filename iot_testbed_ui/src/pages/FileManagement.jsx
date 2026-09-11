@@ -142,7 +142,7 @@ const FileManagement = () => {
       setFiles(files.filter((file) => file.id !== fileToDelete.id));
       setError('');
     } catch (err) {
-      setError('Failed to delete file');
+      setError(err.response?.data?.detail || 'Failed to delete file');
     } finally {
       setDeleteDialogOpen(false);
       setFileToDelete(null);

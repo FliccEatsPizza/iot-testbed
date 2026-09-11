@@ -85,7 +85,7 @@ class Job(Base):
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey('job_groups.id'), nullable=False)
     device_id = Column(Integer, ForeignKey('devices.id'), nullable=False)
-    source_file_id = Column(Integer, ForeignKey('files.id'), nullable=False)
+    source_file_id = Column(Integer, ForeignKey('files.id'), nullable=True)
     output_file_id = Column(Integer, ForeignKey('files.id'), nullable=True)
     status = Column(SQLEnum(JobStatus), default=JobStatus.pending, nullable=False)
     created_at = Column(DateTime, default=datetime.now(timezone.utc), nullable=False)
