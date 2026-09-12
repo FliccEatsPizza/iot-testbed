@@ -1,27 +1,133 @@
+<!DOCTYPE html>
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Visualizing Real-Time Sensor Data</title>
+    <title>IoT Testbed — Real-Time Telemetry & Cloud Actuation</title>
     <script language="javascript" type="text/javascript" src="/js/jquery-3.2.1.js"></script>
     <script language="javascript" type="text/javascript" src="/js/jquery.flot.js"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h1 { margin-top: 0; color: #2c3e50; font-size: 24px; }
+        .card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .btn-group { display: flex; gap: 12px; margin-top: 10px; }
+        button {
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-on { background: #22c55e; color: #fff; }
+        .btn-on:hover { background: #16a34a; }
+        .btn-off { background: #ef4444; color: #fff; }
+        .btn-off:hover { background: #dc2626; }
+        .btn-toggle { background: #3b82f6; color: #fff; }
+        .btn-toggle:hover { background: #2563eb; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: #475569;
+        }
+        .badge-active { background: #dcfce7; color: #15803d; }
+    </style>
     <script language="javascript" type="text/javascript">
         var socket = io.connect();
         var items = [];
         var counter = 0;
+
         socket.on('data', function (data) {
             items.push([counter, data]);
             counter = counter + 1;
-            if (items.length > 20)
-                items.shift();
-            $.plot($("#placeholder"), [items]);
+            if (items.length > 30) items.shift();
+            $.plot($("#placeholder"), [items], {
+                series: { lines: { show: true, fill: true, fillColor: "rgba(59, 130, 246, 0.1)" }, color: "#3b82f6" },
+                yaxis: { min: 10, max: 45 }
+            });
+            $("#temp-value").text(data + " °C");
         });
-    </script>
 
+        socket.on('actuation', function (act) {
+            $("#actuation-log").text(act.message || JSON.stringify(act));
+            if (act.state === 1) {
+                $("#led-indicator").text("ON").addClass("badge-active");
+            } else if (act.state === 0) {
+                $("#led-indicator").text("OFF").removeClass("badge-active");
+            }
+        });
+
+        function sendCommand(action) {
+            $("#actuation-log").text("Sending command to edge mote...");
+            $.get("/api/led/" + action, function(data) {
+                $("#actuation-log").text("Response: " + JSON.stringify(data));
+                if (data.state === 1) {
+                    $("#led-indicator").text("ON").addClass("badge-active");
+                } else {
+                    $("#led-indicator").text("OFF").removeClass("badge-active");
+                }
+            }).fail(function(err) {
+                $("#actuation-log").text("Error executing actuation: " + err.statusText);
+            });
+        }
+    </script>
 </head>
 <body>
-<h1>Real-Time Sensor Data Visualization</h1>
-<br>
-<div id="placeholder" style="width:600px;height:300px;"></div>
+<div class="container">
+    <h1>🌐 IoT Testbed — Live Telemetry & Actuation</h1>
+    
+    <!-- Actuation Controls -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="margin: 0; font-size: 18px;">💡 Edge Device Actuator Control</h2>
+            <div>Physical LED State: <span id="led-indicator" class="status-badge">UNKNOWN</span></div>
+        </div>
+        <p style="color: #64748b; font-size: 14px; margin: 8px 0 16px;">
+            Trigger actuation locally below, or from the cloud via <strong>ThingSpeak TalkBack</strong> commands (<code>LED_ON</code>, <code>LED_OFF</code>, <code>LED_TOGGLE</code>).
+        </p>
+        <div class="btn-group">
+            <button class="btn-on" onclick="sendCommand('on')">💡 Turn LED ON</button>
+            <button class="btn-off" onclick="sendCommand('off')">🌑 Turn LED OFF</button>
+            <button class="btn-toggle" onclick="sendCommand('toggle')">🔄 Toggle LED</button>
+        </div>
+        <div style="margin-top: 12px; font-size: 13px; color: #475569;">
+            Status: <span id="actuation-log" style="font-family: monospace;">Ready</span>
+        </div>
+    </div>
+
+    <!-- Live Telemetry Chart -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h2 style="margin: 0; font-size: 18px;">📈 Real-Time Temperature (°C)</h2>
+            <div style="font-size: 20px; font-weight: bold; color: #2563eb;" id="temp-value">-- °C</div>
+        </div>
+        <div id="placeholder" style="width:100%;height:280px;"></div>
+    </div>
+</div>
 </body>
 </html>
