@@ -26,8 +26,8 @@ var thingspeakApiKey = process.argv[3] || process.env.THINGSPEAK_API_KEY || null
 var talkbackId = process.argv[4] || process.env.TALKBACK_ID || null;
 var talkbackApiKey = process.argv[5] || process.env.TALKBACK_API_KEY || null;
 
-// 3. MQTT Broker Configuration (Default: HiveMQ free public broker)
-var mqttBrokerUrl = process.env.MQTT_BROKER || 'mqtt://broker.hivemq.com:1883';
+// 3. MQTT Broker Configuration (Default: Mosquitto public broker or local Mosquitto)
+var mqttBrokerUrl = process.env.MQTT_BROKER || 'mqtt://test.mosquitto.org:1883';
 var mqttTopicTelemetry = process.env.MQTT_TOPIC_TELEMETRY || 'iot-testbed/nrf52840/telemetry';
 var mqttTopicCommand   = process.env.MQTT_TOPIC_COMMAND   || 'iot-testbed/nrf52840/commands';
 var mqttTopicStatus    = process.env.MQTT_TOPIC_STATUS     || 'iot-testbed/nrf52840/status';
