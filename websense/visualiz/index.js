@@ -5,6 +5,12 @@ var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var path = require('path');
+var dns = require('dns');
+
+// Prioritize IPv4 for public internet DNS lookups (since tun0 only routes local mesh fd00::)
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+}
 
 // ============================================================================
 // Configuration
@@ -127,7 +133,11 @@ io.on('connection', function(socket) {
 // ============================================================================
 // MQTT Client Setup (Real-Time Cloud Actuation & Telemetry)
 // ============================================================================
-var mqttClient = mqtt.connect(mqttBrokerUrl);
+var mqttClient = mqtt.connect(mqttBrokerUrl, {
+    family: 4,
+    connectTimeout: 8000,
+    reconnectPeriod: 3000
+});
 
 mqttClient.on('connect', function() {
     console.log('📡 [MQTT] Connected to Cloud Broker at', mqttBrokerUrl);
