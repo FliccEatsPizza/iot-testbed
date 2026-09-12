@@ -14,6 +14,27 @@
 
 static int g_led_state = 0;
 
+/* Helper to turn all physical LEDs ON on the nRF52840 Dongle */
+static void set_physical_leds(int state)
+{
+  g_led_state = state;
+  if(state) {
+    leds_on(LEDS_ALL);
+    leds_single_on(0); /* Green LED (P0.06) */
+    leds_single_on(1); /* Red RGB   (P0.08) */
+    leds_single_on(2); /* Green RGB (P1.09) */
+    leds_single_on(3); /* Blue RGB  (P0.12) */
+    printf("💡 [HARDWARE] All physical LEDs turned ON!\n");
+  } else {
+    leds_off(LEDS_ALL);
+    leds_single_off(0);
+    leds_single_off(1);
+    leds_single_off(2);
+    leds_single_off(3);
+    printf("🌑 [HARDWARE] All physical LEDs turned OFF!\n");
+  }
+}
+
 /*---------------------------------------------------------------------------*/
 /* Handler for LED actuation responses */
 static
@@ -64,38 +85,33 @@ PROCESS_THREAD(webserver_nogui_process, ev, data)
 }
 
 /*---------------------------------------------------------------------------*/
-/* Simple URL dispatcher:
- *   GET /           -> sensor JSON (temp, hum, led)
- *   GET /led/on     -> turns ON physical LED and returns confirmation JSON
- *   GET /led/off    -> turns OFF physical LED and returns confirmation JSON
- *   GET /led/toggle -> toggles physical LED
+/* URL dispatcher:
+ *   Contains "on"     -> turns ON physical LEDs
+ *   Contains "off"    -> turns OFF physical LEDs
+ *   Contains "toggle" -> toggles physical LEDs
+ *   Otherwise         -> returns sensor reading JSON
  */
 httpd_simple_script_t
 httpd_simple_get_script(const char *name)
 {
-  if(name == NULL || strcmp(name, "") == 0 || strcmp(name, "index.html") == 0) {
+  if(name == NULL) {
     return generate_sensor_data;
   }
-  if(strcmp(name, "led/on") == 0 || strcmp(name, "on") == 0) {
-    g_led_state = 1;
-    leds_on(LEDS_ALL);
-    printf("⚡ [ACTUATION] LED ON command executed\n");
+
+  printf("🌐 [HTTP] Incoming request path: \"%s\"\n", name);
+
+  if(strstr(name, "toggle") != NULL) {
+    set_physical_leds(!g_led_state);
     return generate_actuation;
   }
-  if(strcmp(name, "led/off") == 0 || strcmp(name, "off") == 0) {
-    g_led_state = 0;
-    leds_off(LEDS_ALL);
-    printf("⚡ [ACTUATION] LED OFF command executed\n");
+
+  if(strstr(name, "off") != NULL) {
+    set_physical_leds(0);
     return generate_actuation;
   }
-  if(strcmp(name, "led/toggle") == 0 || strcmp(name, "toggle") == 0) {
-    g_led_state = !g_led_state;
-    if(g_led_state) {
-      leds_on(LEDS_ALL);
-    } else {
-      leds_off(LEDS_ALL);
-    }
-    printf("⚡ [ACTUATION] LED TOGGLE command executed (state=%d)\n", g_led_state);
+
+  if(strstr(name, "on") != NULL) {
+    set_physical_leds(1);
     return generate_actuation;
   }
 
@@ -112,9 +128,10 @@ PROCESS_THREAD(web_sense_db, ev, data)
 {
   PROCESS_BEGIN();
 
-  /* Ensure LEDs start in known OFF state */
-  leds_off(LEDS_ALL);
-  g_led_state = 0;
+  /* Blink once on boot to prove LED hardware control works */
+  set_physical_leds(1);
+  clock_delay_usec(50000);
+  set_physical_leds(0);
 
   PROCESS_NAME(webserver_nogui_process);
   process_start(&webserver_nogui_process, NULL);

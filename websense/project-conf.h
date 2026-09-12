@@ -1,7 +1,7 @@
-
 #ifndef PROJECT_CONF_H_
 #define PROJECT_CONF_H_
 
 #define UIP_CONF_TCP 1
+#define WEBSERVER_CONF_CFS_PATHLEN 64
 
 #endif /* PROJECT_CONF_H_ */
