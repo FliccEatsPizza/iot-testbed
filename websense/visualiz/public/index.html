@@ -126,7 +126,14 @@
             <h2 style="margin: 0; font-size: 18px;">📈 Real-Time Temperature (°C)</h2>
             <div style="font-size: 20px; font-weight: bold; color: #2563eb;" id="temp-value">-- °C</div>
         </div>
-        <div id="placeholder" style="width:100%;height:280px;"></div>
+    <!-- Real-Time MQTT Info -->
+    <div class="card" style="background: #f1f5f9; border-left: 4px solid #3b82f6;">
+        <h2 style="margin: 0 0 8px 0; font-size: 16px; color: #1e293b;">📡 Cloud MQTT Control (Zero Latency)</h2>
+        <div style="font-size: 13px; color: #475569; line-height: 1.6;">
+            <div><strong>Broker:</strong> <code>broker.hivemq.com:1883</code> (Websocket: <code>broker.hivemq.com:8000</code>)</div>
+            <div><strong>Actuation Topic:</strong> <code>iot-testbed/nrf52840/commands</code> &nbsp; <em>(Send "ON", "OFF", or "TOGGLE")</em></div>
+            <div><strong>Telemetry Topic:</strong> <code>iot-testbed/nrf52840/telemetry</code> &nbsp; <em>(Live sensor JSON published every 3s)</em></div>
+        </div>
     </div>
 </div>
 </body>
