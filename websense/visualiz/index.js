@@ -6,9 +6,13 @@ var io = require('socket.io')(http);
 var path = require('path');
 
 // Target IPv6 of the websense edge device
-// Can be passed via command line argument: node index.js fd00::xxxx...
-// or via environment variable: NODE_IP=fd00::xxxx node index.js
-var targetIp = process.argv[2] || process.env.NODE_IP || 'fd00::f6ce:3648:1501:373e';
+// Priority:
+// 1. Command-line argument: node index.js fd00::xxxx
+// 2. NODE_IP environment variable
+// 3. CONTIKI_NODES environment variable (injected by Pi sandbox)
+// 4. Fallback default
+var contikiNode = process.env.CONTIKI_NODES ? process.env.CONTIKI_NODES.split(',')[0].trim() : null;
+var targetIp = process.argv[2] || process.env.NODE_IP || contikiNode || 'fd00::f6ce:3648:1501:373e';
 var targetUrl = 'http://[' + targetIp + ']/';
 
 console.log('Target Websense Node URL:', targetUrl);
