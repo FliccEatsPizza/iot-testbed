@@ -102,42 +102,77 @@ class TunslipManager:
                         self.br_ipv6 = found_ip
                         self.is_ready = True
 
-    async def discover_nodes(self, br_ipv6: Optional[str] = None, timeout: float = 30.0, retry_interval: float = 5.0) -> List[str]:
+    async def discover_nodes(self, br_ipv6: Optional[str] = None, timeout: float = 35.0, retry_interval: float = 3.0) -> List[str]:
         """
-        Polls the Border Router's HTTP web interface (http://[<br_ipv6>]/) to discover connected RPL nodes.
+        Discovers connected RPL nodes by checking:
+        1. Linux kernel IPv6 routes on tun0 (tunslip6 adds /128 host routes for connected RPL nodes)
+        2. Linux kernel IPv6 neighbor table on tun0
+        3. Border Router HTTP web interface (http://[<br_ipv6>]/) if available
         Returns a list of global IPv6 addresses for connected nodes.
         """
         target_ip = br_ipv6 or self.br_ipv6
-        if not target_ip:
-            logger.warning("No Border Router IPv6 specified for node discovery")
-            return []
-
-        url = f"http://[{target_ip}]/"
         discovered_nodes = set()
         ip_regex = re.compile(r'(fd00:[0-9a-fA-F:]+)')
 
         start_time = asyncio.get_event_loop().time()
-        logger.info(f"Starting RPL node discovery via {url} (timeout: {timeout}s)")
+        logger.info(f"Starting RPL node discovery (timeout: {timeout}s)")
 
         while asyncio.get_event_loop().time() - start_time < timeout:
+            # Method 1: Check Linux kernel IPv6 routes on tun0
+            # Contiki-NG tunslip6 creates host routes (e.g. fd00::.../128 or fd00::... dev tun0)
             try:
-                timeout_client = aiohttp.ClientTimeout(total=3.0)
-                async with aiohttp.ClientSession(timeout=timeout_client) as session:
-                    async with session.get(url) as response:
-                        if response.status == 200:
-                            html = await response.text()
-                            matches = ip_regex.findall(html)
-                            for match in matches:
-                                cleaned_ip = match.rstrip(':')
-                                # Ignore border router's own IP and prefix gateway
-                                if cleaned_ip not in ("fd00::1", target_ip):
-                                    discovered_nodes.add(cleaned_ip)
+                proc = await asyncio.create_subprocess_exec(
+                    "ip", "-6", "route", "show", "dev", "tun0",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                for line in stdout.decode().splitlines():
+                    match = ip_regex.search(line)
+                    if match:
+                        found_ip = match.group(1).rstrip(':').split('/')[0]
+                        if found_ip not in ("fd00::1", target_ip, "fd00::"):
+                            discovered_nodes.add(found_ip)
+            except Exception:
+                pass
 
-                            if discovered_nodes:
-                                logger.info(f"Discovered {len(discovered_nodes)} Contiki-NG nodes: {list(discovered_nodes)}")
-                                return list(discovered_nodes)
-            except Exception as e:
-                logger.debug(f"HTTP request to BR web server failed (network forming...): {e}")
+            # Method 2: Check Linux kernel IPv6 neighbor table on tun0
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "ip", "-6", "neigh", "show", "dev", "tun0",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.DEVNULL
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=2.0)
+                for line in stdout.decode().splitlines():
+                    match = ip_regex.search(line)
+                    if match:
+                        found_ip = match.group(1).rstrip(':')
+                        if found_ip not in ("fd00::1", target_ip):
+                            discovered_nodes.add(found_ip)
+            except Exception:
+                pass
+
+            # Method 3: Poll HTTP web interface if target_ip is known
+            if target_ip:
+                try:
+                    url = f"http://[{target_ip}]/"
+                    timeout_client = aiohttp.ClientTimeout(total=2.0)
+                    async with aiohttp.ClientSession(timeout=timeout_client) as session:
+                        async with session.get(url) as response:
+                            if response.status == 200:
+                                html = await response.text()
+                                matches = ip_regex.findall(html)
+                                for match in matches:
+                                    cleaned_ip = match.rstrip(':')
+                                    if cleaned_ip not in ("fd00::1", target_ip):
+                                        discovered_nodes.add(cleaned_ip)
+                except Exception:
+                    pass
+
+            if discovered_nodes:
+                logger.info(f"Discovered {len(discovered_nodes)} Contiki-NG nodes: {list(discovered_nodes)}")
+                return list(discovered_nodes)
 
             await asyncio.sleep(retry_interval)
 

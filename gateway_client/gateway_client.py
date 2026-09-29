@@ -214,7 +214,13 @@ async def handle_job_notification(job_data: dict):
                     try:
                         print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 120s)...")
                         await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=120.0)
-                        print_status(job_id, device_id, "🌐 tun0 is ready! Launching sandbox container...")
+                        print_status(job_id, device_id, "🌐 tun0 is ready! Waiting for node discovery...")
+                        # Wait for nodes to be discovered over the RPL mesh
+                        try:
+                            await asyncio.wait_for(g_state["nodes_discovered"].wait(), timeout=35.0)
+                            print_status(job_id, device_id, "🎯 Node discovery complete! Launching sandbox...")
+                        except asyncio.TimeoutError:
+                            print_status(job_id, device_id, "⚠️ Node discovery timed out, launching sandbox with available targets...")
                     except asyncio.TimeoutError:
                         print_status(job_id, device_id, "⚠️ tun0 wait timed out, proceeding with sandbox...")
 
@@ -248,7 +254,14 @@ async def handle_job_notification(job_data: dict):
                         print_status(job_id, device_id, "⚠️ Border router wait timed out, proceeding with physical flashing...")
 
                 await flash_device(job_id, device_id)
-                await collect_logs(job_id, device_id)
+                # Wait 3s for USB port to re-enumerate after flashing
+                print_status(job_id, device_id, "⏳ Waiting 3s for USB port to re-enumerate after flash...")
+                await asyncio.sleep(3)
+                try:
+                    await collect_logs(job_id, device_id)
+                except Exception as log_err:
+                    print_status(job_id, device_id, f"⚠️ Serial log collection ended: {log_err}")
+                await update_job_status(job_id, "completed")
 
             print_status(job_id, device_id, "✅ Job processing completed")
             
@@ -530,8 +543,11 @@ async def collect_logs(job_id: int, device_id: int):
         writer.transport.serial.rts = True
         await asyncio.sleep(1)
         
-        writer.write(b'\n')
-        await writer.drain()
+        try:
+            writer.write(b'\n')
+            await writer.drain()
+        except Exception:
+            pass
         
         log_active = False
         with open(log_path, "w", encoding="utf-8") as f:
