@@ -10,3 +10,5 @@ logs/
 *.db
 gateway_client/gateway_devices.db
 gateway_client/downloads/
+contiki-ng-develop/
+contiki-ng-develop.zip

@@ -196,7 +196,8 @@ async def handle_job_notification(job_data: dict):
                     else:
                         print_status(job_id, device_id, "⚠️ No border router IP detected — sandbox will use fd00::1 fallback")
 
-                logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, br_ip=br_ip, log_duration=60)
+                sandbox_duration = int(os.getenv("SANDBOX_LOG_DURATION", "120"))
+                logs = await run_sandbox_job(job_id, device_id, node_ips=node_ips, peers=peers, br_ip=br_ip, log_duration=sandbox_duration)
                 await upload_logs_from_string(job_id, logs)
                 await update_job_status(job_id, "completed")
 
@@ -297,10 +298,21 @@ async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
                 source_file_path.endswith(ext) for ext in ('.dfu', '.zip', '.hex', '.bin')
             )
 
+            # Auto-extract zip archives for sandbox jobs
+            if device_type == "sandbox" and source_file_path and source_file_path.endswith('.zip'):
+                import zipfile, shutil
+                print_status(job_id, message=f"📦 Extracting sandbox archive: {os.path.basename(source_file_path)}")
+                try:
+                    with zipfile.ZipFile(source_file_path, 'r') as zip_ref:
+                        zip_ref.extractall(job_dir)
+                    print_status(job_id, message="✅ Extraction completed")
+                except Exception as ex:
+                    print_status(job_id, message=f"⚠️ Failed to extract zip: {ex}")
+
             # Sandbox compiles inside Docker; pre-built binaries skip host make
             if device_type != "sandbox" and not is_prebuilt:
                 await compile_source_code(job_id)
-            elif is_prebuilt:
+            elif is_prebuilt and device_type != "sandbox":
                 print_status(job_id, message=f"📦 Pre-built firmware detected ({os.path.basename(source_file_path)}), skipping compilation")
                 
             await update_job_status(job_id, "pending")

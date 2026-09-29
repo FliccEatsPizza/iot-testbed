@@ -73,7 +73,7 @@ class JobStatusUpdate(BaseModel):
 
 class JobSchema(BaseModel):
     id: int
-    source_file_id: int
+    source_file_id: Optional[int] = None
     group_id: int
     device_id: int
     status: JobStatus

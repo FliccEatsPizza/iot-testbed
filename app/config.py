@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     JWT_SECRET_KEY: str = "secret" # replace with a strong secret key
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200  # 30 days
     UPLOAD_DIR: str = "./uploads"
     LOGS_DIR: str = "./logs"
     

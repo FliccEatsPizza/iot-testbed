@@ -1,8 +1,8 @@
 import os
 
-# Base server host defaults to your laptop's mDNS hostname (LAPTOP-TTI3F4FK.local)
+# Base server host defaults to your laptop's current Wi-Fi IP (10.154.202.158)
 # Can be overridden via SERVER_HOST or SERVER_URL environment variable if needed.
-SERVER_HOST = os.getenv("SERVER_HOST", "LAPTOP-TTI3F4FK.local")
+SERVER_HOST = os.getenv("SERVER_HOST", "10.154.202.158")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
