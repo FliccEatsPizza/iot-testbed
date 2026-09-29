@@ -29,7 +29,18 @@ build:
 	@echo "Building project in $(SRC_DIR)"
 	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
 		echo "Found existing Makefile in $(SRC_DIR), using it..."; \
-		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI); \
+		VALID_TARGETS=""; \
+		for proj in $$(grep -E "^CONTIKI_PROJECT[ \t]*=" "$(SRC_DIR)/Makefile" | cut -d'=' -f2); do \
+			if [ -f "$(SRC_DIR)/$$proj.c" ]; then \
+				VALID_TARGETS="$$VALID_TARGETS $$proj"; \
+			fi; \
+		done; \
+		if [ -n "$$VALID_TARGETS" ]; then \
+			echo "Building target(s) with source files:$$VALID_TARGETS"; \
+			cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI) $$VALID_TARGETS; \
+		else \
+			cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI); \
+		fi; \
 	else \
 		mkdir -p $(SRC_DIR)/build; \
 		echo "CONTIKI_PROJECT = $$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile; \
@@ -51,10 +62,17 @@ flash:
 	@echo "Flashing project in $(SRC_DIR)"
 	@$(MAKE) -f $(BASE_DIR)/Makefile build SRC_DIR=$(SRC_DIR) TARGET=$(TARGET) BOARD=$(BOARD)
 	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
-		PROJECT_NAME=$$(grep -E "^CONTIKI_PROJECT[ \t]*=" "$(SRC_DIR)/Makefile" | cut -d'=' -f2 | tr -d ' ' | head -1); \
+		PROJECT_NAME=""; \
+		for proj in $$(grep -E "^CONTIKI_PROJECT[ \t]*=" "$(SRC_DIR)/Makefile" | cut -d'=' -f2); do \
+			if [ -f "$(SRC_DIR)/$$proj.c" ]; then \
+				PROJECT_NAME="$$proj"; \
+				break; \
+			fi; \
+		done; \
 		if [ -z "$$PROJECT_NAME" ]; then \
 			PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
 		fi; \
+		echo "Flashing target: $$PROJECT_NAME to $(PORT)"; \
 		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
 	else \
 		PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
