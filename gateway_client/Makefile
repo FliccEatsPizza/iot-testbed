@@ -27,37 +27,48 @@ endif
 # Main project logic
 build:
 	@echo "Building project in $(SRC_DIR)"
-	@mkdir -p $(SRC_DIR)/build
-	@# Create a temporary Makefile in the source directory
-	@echo "CONTIKI_PROJECT = $(shell basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile
-	@echo "all: \$$(CONTIKI_PROJECT)" >> $(SRC_DIR)/build/Makefile
-	@if grep -q "root_start" $(SRC_DIR)/*.c 2>/dev/null || echo "$(SRC_DIR)" | grep -qi "border"; then \
-		echo "MODULES += os/services/rpl-border-router" >> $(SRC_DIR)/build/Makefile; \
-		echo "Added RPL Border Router module to build"; \
+	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
+		echo "Found existing Makefile in $(SRC_DIR), using it..."; \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD); \
+	else \
+		mkdir -p $(SRC_DIR)/build; \
+		echo "CONTIKI_PROJECT = $$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile; \
+		echo "all: \$$(CONTIKI_PROJECT)" >> $(SRC_DIR)/build/Makefile; \
+		if grep -q "root_start" $(SRC_DIR)/*.c 2>/dev/null || echo "$(SRC_DIR)" | grep -qi "border"; then \
+			echo "MODULES += os/services/rpl-border-router" >> $(SRC_DIR)/build/Makefile; \
+			echo "Added RPL Border Router module to build"; \
+		fi; \
+		echo "CONTIKI = $(CONTIKI)" >> $(SRC_DIR)/build/Makefile; \
+		echo "include \$$(CONTIKI)/Makefile.include" >> $(SRC_DIR)/build/Makefile; \
+		cp $(SRC_DIR)/*.c $(SRC_DIR)/build/; \
+		cp $(SRC_DIR)/*.h $(SRC_DIR)/build/ 2>/dev/null || true; \
+		cd $(SRC_DIR)/build && make TARGET=$(TARGET) BOARD=$(BOARD); \
+		cp $(SRC_DIR)/build/*.$(TARGET) $(SRC_DIR)/ 2>/dev/null || true; \
+		echo "Build complete. Output files copied to $(SRC_DIR)"; \
 	fi
-	@echo "CONTIKI = $(CONTIKI)" >> $(SRC_DIR)/build/Makefile
-	@echo "include \$$(CONTIKI)/Makefile.include" >> $(SRC_DIR)/build/Makefile
-	@# Copy source files to the build directory
-	@cp $(SRC_DIR)/*.c $(SRC_DIR)/build/
-	@cp $(SRC_DIR)/*.h $(SRC_DIR)/build/ 2>/dev/null || true
-	@# Run make in the build directory
-	@cd $(SRC_DIR)/build && make TARGET=$(TARGET) BOARD=$(BOARD)
-	@# Copy the compiled files back to the source directory
-	@cp $(SRC_DIR)/build/*.$(TARGET) $(SRC_DIR)/ 2>/dev/null || true
-	@echo "Build complete. Output files copied to $(SRC_DIR)"
 
 flash:
 	@echo "Flashing project in $(SRC_DIR)"
-	@# Must build first
 	@$(MAKE) -f $(BASE_DIR)/Makefile build SRC_DIR=$(SRC_DIR) TARGET=$(TARGET) BOARD=$(BOARD)
-	@# Get project name
-	@PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
-	cd $(SRC_DIR)/build && make TARGET=$(TARGET) BOARD=$(BOARD) $$PROJECT_NAME.dfu-upload PORT=$(PORT)
+	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
+		PROJECT_NAME=$$(grep -E "^CONTIKI_PROJECT[ \t]*=" "$(SRC_DIR)/Makefile" | cut -d'=' -f2 | tr -d ' ' | head -1); \
+		if [ -z "$$PROJECT_NAME" ]; then \
+			PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
+		fi; \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
+	else \
+		PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
+		cd $(SRC_DIR)/build && make TARGET=$(TARGET) BOARD=$(BOARD) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
+	fi
 
 clean:
 	@echo "Cleaning project in $(SRC_DIR)"
-	@rm -rf $(SRC_DIR)/build
-	@rm -f $(SRC_DIR)/*.$(TARGET) $(SRC_DIR)/*.hex $(SRC_DIR)/*.elf $(SRC_DIR)/*.bin $(SRC_DIR)/*.dfu
+	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) clean; \
+	else \
+		rm -rf $(SRC_DIR)/build; \
+		rm -f $(SRC_DIR)/*.$(TARGET) $(SRC_DIR)/*.hex $(SRC_DIR)/*.elf $(SRC_DIR)/*.bin $(SRC_DIR)/*.dfu; \
+	fi
 
 # Default target
 .PHONY: build flash clean
