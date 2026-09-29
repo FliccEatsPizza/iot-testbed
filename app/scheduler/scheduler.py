@@ -56,6 +56,7 @@ class JobScheduler:
 
             # Pre-compute all sandbox peer hostnames in this group
             sandbox_jobs = [j for j in jobs if device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "sandbox"]
+            has_border_router = any(device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "border_router" for j in jobs)
 
             for job in jobs:
                 job.status = JobStatus.running
@@ -71,6 +72,7 @@ class JobScheduler:
                     "device_id": job.device_id,
                     "device_name": matching_device.name,
                     "device_type": matching_device.device_type.value,
+                    "has_border_router": has_border_router,
                     "tun_prefix": "fd00::1/64",
                     "sandbox_peers": peers
                 }

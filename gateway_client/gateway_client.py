@@ -153,6 +153,9 @@ async def handle_job_notification(job_data: dict):
             g_state = get_or_create_group_state(group_id)
             g_state["active_jobs"].add(job_id)
 
+            if job_data.get('has_border_router') or dtype == 'border_router':
+                g_state["has_border_router"] = True
+
             print_status(job_id, device_id, f"🚀 Starting job processing [type={dtype}]")
 
             # ----------------------------------------------------
@@ -206,11 +209,11 @@ async def handle_job_notification(job_data: dict):
             # 2. VIRTUAL PI SANDBOX EXECUTION PATH
             # ----------------------------------------------------
             elif dtype == 'sandbox':
-                # Only wait for tunslip_ready if THIS job group includes a border_router job
+                # Wait for tunslip_ready if THIS job group includes a border_router job
                 if g_state["has_border_router"]:
                     try:
-                        print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 60s)...")
-                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=60.0)
+                        print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 120s)...")
+                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=120.0)
                         print_status(job_id, device_id, "🌐 tun0 is ready! Launching sandbox container...")
                     except asyncio.TimeoutError:
                         print_status(job_id, device_id, "⚠️ tun0 wait timed out, proceeding with sandbox...")
@@ -238,10 +241,11 @@ async def handle_job_notification(job_data: dict):
                 # If a border router is part of this group, wait until tunslip6 is up before flashing
                 if g_state["has_border_router"]:
                     try:
-                        print_status(job_id, device_id, "⏳ Waiting for Border Router initialization...")
-                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=20.0)
+                        print_status(job_id, device_id, "⏳ Waiting for Border Router initialization (up to 120s)...")
+                        await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=120.0)
+                        print_status(job_id, device_id, "🌐 Border router is up! Now flashing physical device...")
                     except asyncio.TimeoutError:
-                        pass
+                        print_status(job_id, device_id, "⚠️ Border router wait timed out, proceeding with physical flashing...")
 
                 await flash_device(job_id, device_id)
                 await collect_logs(job_id, device_id)
@@ -301,13 +305,36 @@ async def compile_source_code(job_id: int):
         proc = await asyncio.create_subprocess_exec(
             *compile_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT
         )
         
-        stdout, stderr = await proc.communicate()
+        output_lines = []
+        timeout_seconds = 180.0
+        start_time = time.time()
         
+        while time.time() - start_time < timeout_seconds:
+            try:
+                line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+                if not line_bytes:
+                    if proc.returncode is not None:
+                        break
+                    continue
+                decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
+                if decoded:
+                    output_lines.append(decoded)
+                    print_status(job_id, message=f"[Compile] {decoded}")
+            except asyncio.TimeoutError:
+                if proc.returncode is not None:
+                    break
+                continue
+                
+        if proc.returncode is None:
+            proc.kill()
+            raise Exception(f"Compilation timed out after {int(timeout_seconds)}s")
+            
         if proc.returncode != 0:
-            raise Exception(f"Compilation failed:\n{stderr.decode()}")
+            tail = "\n".join(output_lines[-15:])
+            raise Exception(f"Compilation exited with code {proc.returncode}:\n{tail}")
         
         print_status(job_id, message="✅ Compilation successful")
     except Exception as e:
@@ -372,22 +399,41 @@ async def flash_device(job_id: int, device_id: int):
         
         source_path = f"./downloads/{job_id}"
         flash_cmd = ["make", "flash", f"PORT={port}", f"SRC_DIR={source_path}"]
+        print_status(job_id, device_id, f"⚡ Executing: {' '.join(flash_cmd)}")
         
         proc = await asyncio.create_subprocess_exec(
             *flash_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT
         )
         
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=30)
-        except asyncio.TimeoutError:
-            proc.kill()
-            raise Exception("Flashing timed out after 30 seconds")
+        output_lines = []
+        timeout_seconds = 120.0
+        start_time = time.time()
         
+        while time.time() - start_time < timeout_seconds:
+            try:
+                line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+                if not line_bytes:
+                    if proc.returncode is not None:
+                        break
+                    continue
+                decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
+                if decoded:
+                    output_lines.append(decoded)
+                    print_status(job_id, device_id, f"[Flash] {decoded}")
+            except asyncio.TimeoutError:
+                if proc.returncode is not None:
+                    break
+                continue
+        
+        if proc.returncode is None:
+            proc.kill()
+            raise Exception(f"Flashing timed out after {int(timeout_seconds)} seconds")
+            
         if proc.returncode != 0:
-            stderr = await proc.stderr.read()
-            raise Exception(f"Flashing failed: {stderr.decode()}")
+            tail = "\n".join(output_lines[-10:])
+            raise Exception(f"Flashing process exited with code {proc.returncode}:\n{tail}")
             
         await update_job_status(job_id, "running")
         print_status(job_id, device_id, "✅ Flashing completed successfully")
@@ -406,22 +452,41 @@ async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
             raise Exception(f"Device {device_id} not found")
 
         flash_cmd = ["nrfutil", "dfu", "usb-serial", "-pkg", dfu_path, "-p", port, "-b", "115200"]
+        print_status(job_id, device_id, f"📦 Executing: {' '.join(flash_cmd)}")
+        
         proc = await asyncio.create_subprocess_exec(
             *flash_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.STDOUT
         )
 
-        try:
-            await asyncio.wait_for(proc.wait(), timeout=60)
-        except asyncio.TimeoutError:
+        output_lines = []
+        timeout_seconds = 120.0
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout_seconds:
+            try:
+                line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+                if not line_bytes:
+                    if proc.returncode is not None:
+                        break
+                    continue
+                decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
+                if decoded:
+                    output_lines.append(decoded)
+                    print_status(job_id, device_id, f"[DFU] {decoded}")
+            except asyncio.TimeoutError:
+                if proc.returncode is not None:
+                    break
+                continue
+
+        if proc.returncode is None:
             proc.kill()
-            raise Exception("DFU flashing timed out after 60 seconds")
+            raise Exception(f"DFU flashing timed out after {int(timeout_seconds)} seconds")
 
         if proc.returncode != 0:
-            stderr = await proc.stderr.read()
-            stdout = await proc.stdout.read()
-            raise Exception(f"DFU flash failed:\n{stdout.decode()}\n{stderr.decode()}")
+            tail = "\n".join(output_lines[-10:])
+            raise Exception(f"DFU flash failed (code {proc.returncode}):\n{tail}")
 
         await update_job_status(job_id, "running")
         print_status(job_id, device_id, "✅ DFU flashing completed successfully")
