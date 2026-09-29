@@ -164,7 +164,7 @@ def main():
     initialize_database()
     
     print("=" * 60)
-    print(" IoT Testbed — Add / Map Physical USB Device")
+    print(f" IoT Testbed — Add / Map Physical USB Device [Gateway ID: {GATEWAY_ID}]")
     print("=" * 60)
 
     # Device discovery and selection
@@ -200,7 +200,7 @@ def main():
     # Local storage
     store_device_mapping(server_response, selected, device_type)
 
-    print(f"\n🎉 Device '{name}' [{device_type}] successfully registered and ready for jobs!\n")
+    print(f"\n🎉 Device '{name}' [{device_type}] successfully registered to Gateway {GATEWAY_ID} (ID: {server_response['id']}) and ready for jobs!\n")
 
 if __name__ == "__main__":
     main()
