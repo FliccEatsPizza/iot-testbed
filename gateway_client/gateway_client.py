@@ -164,12 +164,13 @@ async def handle_job_notification(job_data: dict):
             if dtype == 'border_router':
                 g_state["has_border_router"] = True
 
-                # Detect if job has a pre-built DFU or a compiled .nrf52840 binary
+                # Detect if job has a pre-built DFU package (manifest.json) or .dfu file
                 job_dir = f"./downloads/{job_id}"
                 all_files = os.listdir(job_dir) if os.path.isdir(job_dir) else []
-                dfu_files = [f for f in all_files if f.endswith('.dfu') or f.endswith('.zip')]
+                is_dfu_pkg = os.path.exists(os.path.join(job_dir, "manifest.json")) or any(f.endswith('.dfu') for f in all_files)
 
-                if dfu_files:
+                if is_dfu_pkg:
+                    dfu_files = [f for f in all_files if f.endswith('.dfu') or f.endswith('.zip')]
                     dfu_path = os.path.join(job_dir, dfu_files[0])
                     await flash_dfu(job_id, device_id, dfu_path)
                 else:
