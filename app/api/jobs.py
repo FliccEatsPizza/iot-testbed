@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone
 import os
 
@@ -11,7 +11,7 @@ from ..schemas.schemas import JobSchema, JobStatusUpdate, UserSchema
 from ..api.auth import get_current_user_dependency
 from ..services.job_service import JobService
 from ..services.gateway_service import GatewayService
-from ..models.models import Job, JobGroup, Device, JobStatus, DeviceStatus
+from ..models.models import Job, JobGroup, Device, Gateway, JobStatus, DeviceStatus
 
 router = APIRouter(
     prefix="/jobs",
