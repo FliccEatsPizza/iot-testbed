@@ -188,13 +188,49 @@ class TunslipManager:
                 except Exception:
                     pass
 
+            # Probe candidates for HTTP / responsiveness to ensure we don't pick stale or non-responsive motes
             if discovered_nodes:
-                logger.info(f"Discovered {len(discovered_nodes)} Contiki-NG nodes: {list(discovered_nodes)}")
-                return list(discovered_nodes)
+                http_nodes = []
+                ping_nodes = []
+                for node_ip in list(discovered_nodes):
+                    # 1. Test HTTP GET (e.g. websense server)
+                    try:
+                        timeout_probe = aiohttp.ClientTimeout(total=1.2)
+                        async with aiohttp.ClientSession(timeout=timeout_probe) as sess:
+                            async with sess.get(f"http://[{node_ip}]/") as pr:
+                                if pr.status == 200:
+                                    http_nodes.append(node_ip)
+                                    continue
+                    except Exception:
+                        pass
+                    
+                    # 2. Test ICMPv6 ping
+                    try:
+                        ping_proc = await asyncio.create_subprocess_exec(
+                            "ping", "-6", "-c", "1", "-W", "1", "-I", "tun0", node_ip,
+                            stdout=asyncio.subprocess.DEVNULL,
+                            stderr=asyncio.subprocess.DEVNULL
+                        )
+                        ret = await asyncio.wait_for(ping_proc.wait(), timeout=1.5)
+                        if ret == 0:
+                            ping_nodes.append(node_ip)
+                    except Exception:
+                        pass
+
+                if http_nodes:
+                    verified = http_nodes + [n for n in discovered_nodes if n not in http_nodes]
+                    print(f"🎯 Verified responsive HTTP (websense) mote(s): {http_nodes}")
+                    logger.info(f"Verified responsive HTTP nodes: {http_nodes}")
+                    return verified
+                elif ping_nodes:
+                    verified = ping_nodes + [n for n in discovered_nodes if n not in ping_nodes]
+                    print(f"🎯 Verified reachable ping mote(s): {ping_nodes}")
+                    logger.info(f"Verified reachable ping nodes: {ping_nodes}")
+                    return verified
 
             await asyncio.sleep(retry_interval)
 
-        logger.info(f"Discovery completed with {len(discovered_nodes)} nodes found")
+        logger.info(f"Discovery completed with {len(discovered_nodes)} nodes found (fallback)")
         return list(discovered_nodes)
 
     async def stop_tunslip(self):

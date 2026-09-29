@@ -57,13 +57,18 @@ class JobScheduler:
             # Pre-compute all sandbox peer hostnames in this group
             sandbox_jobs = [j for j in jobs if device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "sandbox"]
             
-            # Detect if any job in this group includes border-router firmware
+            # Detect which gateway(s) actually have border-router firmware in this group
             source_file_ids = [j.source_file_id for j in jobs if j.source_file_id]
             files = db.query(File).filter(File.id.in_(source_file_ids)).all() if source_file_ids else []
             file_map = {f.id: f.filename.lower() for f in files}
-            has_border_router = any("border" in file_map.get(j.source_file_id, "") for j in jobs)
-            if has_border_router:
-                logger.info(f"Job group {group.id} includes border-router firmware — synchronized mesh startup enabled")
+            
+            border_router_gateways = {
+                device_map[j.device_id].gateway_id
+                for j in jobs
+                if device_map.get(j.device_id) and "border" in file_map.get(j.source_file_id, "")
+            }
+            if border_router_gateways:
+                logger.info(f"Job group {group.id} includes border-router firmware on gateway(s) {border_router_gateways} — synchronized mesh startup enabled")
 
             for job in jobs:
                 job.status = JobStatus.running
@@ -73,13 +78,16 @@ class JobScheduler:
                 # Peers for sandbox containers
                 peers = [f"sandbox-job-{sj.id}" for sj in sandbox_jobs if sj.id != job.id]
                 
+                # Only jobs on the SAME gateway as a border router should wait for tun0
+                job_has_br = matching_device.gateway_id in border_router_gateways
+                
                 job_data = {
                     "job_id": job.id,
                     "group_id": job.group_id,
                     "device_id": job.device_id,
                     "device_name": matching_device.name,
                     "device_type": matching_device.device_type.value,
-                    "has_border_router": has_border_router,
+                    "has_border_router": job_has_br,
                     "tun_prefix": "fd00::1/64",
                     "sandbox_peers": peers
                 }

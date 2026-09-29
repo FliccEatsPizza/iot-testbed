@@ -13,9 +13,11 @@ def run_remote(cmd: str, host: str = None):
         out = stdout.read().decode('utf-8', errors='ignore')
         err = stderr.read().decode('utf-8', errors='ignore')
         if out:
-            print(out, end='')
+            sys.stdout.buffer.write(out.encode('utf-8', errors='replace'))
+            sys.stdout.buffer.flush()
         if err:
-            print("[STDERR]", err, end='', file=sys.stderr)
+            sys.stderr.buffer.write(f"[STDERR] {err}".encode('utf-8', errors='replace'))
+            sys.stderr.buffer.flush()
         return stdout.channel.recv_exit_status()
     except Exception as e:
         print(f"SSH Failed: {e}", file=sys.stderr)
