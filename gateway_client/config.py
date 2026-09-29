@@ -10,6 +10,16 @@ SERVER_URL = os.getenv("SERVER_URL", f"http://{SERVER_HOST}:{SERVER_PORT}")
 API_BASE_URL = os.getenv("API_BASE_URL", f"{SERVER_URL}/api/v1")
 REDIS_URL = os.getenv("REDIS_URL", f"redis://{SERVER_HOST}:{REDIS_PORT}/0")
 
-GATEWAY_ID = int(os.getenv("GATEWAY_ID", "1"))
+def _get_default_gateway_id():
+    id_file = os.path.join(os.path.dirname(__file__), "gateway_id.txt")
+    if os.path.exists(id_file):
+        try:
+            with open(id_file, "r") as f:
+                return int(f.read().strip())
+        except Exception:
+            pass
+    return 1
+
+GATEWAY_ID = int(os.getenv("GATEWAY_ID", str(_get_default_gateway_id())))
 GATEWAY_TOKEN = os.getenv("GATEWAY_TOKEN", "abcdefgh12345678")
 DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./downloads")
