@@ -11,7 +11,7 @@ SRC_DIR ?= .
 BASE_DIR := $(shell pwd)
 
 # Path to Contiki-NG (update this to your actual path)
-CONTIKI ?= ~/Desktop/contiki-ng
+CONTIKI ?= $(HOME)/Desktop/contiki-ng
 
 # Check if source directory exists
 ifneq ($(shell test -d $(SRC_DIR) && echo yes),yes)
