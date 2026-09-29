@@ -102,14 +102,33 @@ class TunslipManager:
                         self.br_ipv6 = found_ip
                         self.is_ready = True
 
-    async def discover_nodes(self, br_ipv6: Optional[str] = None, timeout: float = 35.0, retry_interval: float = 3.0) -> List[str]:
+    async def discover_nodes(self, br_ipv6: Optional[str] = None, timeout: float = 60.0, retry_interval: float = 2.0) -> List[str]:
         """
         Discovers connected RPL nodes by checking:
         1. Linux kernel IPv6 routes on tun0 (tunslip6 adds /128 host routes for connected RPL nodes)
         2. Linux kernel IPv6 neighbor table on tun0
         3. Border Router HTTP web interface (http://[<br_ipv6>]/) if available
-        Returns a list of global IPv6 addresses for connected nodes.
+        Returns a list of verified global IPv6 host addresses.
         """
+        import ipaddress
+
+        def is_valid_mote_ip(candidate: str) -> Optional[str]:
+            cleaned = candidate.strip().strip("[]").split('/')[0].rstrip(':')
+            try:
+                addr = ipaddress.IPv6Address(cleaned)
+                if not cleaned.lower().startswith("fd00:"):
+                    return None
+                if addr in (ipaddress.IPv6Address("fd00::1"), ipaddress.IPv6Address("fd00::")):
+                    return None
+                if target_ip and addr == ipaddress.IPv6Address(target_ip):
+                    return None
+                # Must be a real host address with multiple colons
+                if cleaned.count(':') < 2:
+                    return None
+                return str(addr)
+            except ValueError:
+                return None
+
         target_ip = br_ipv6 or self.br_ipv6
         discovered_nodes = set()
         ip_regex = re.compile(r'(fd00:[0-9a-fA-F:]+)')
@@ -119,7 +138,6 @@ class TunslipManager:
 
         while asyncio.get_event_loop().time() - start_time < timeout:
             # Method 1: Check Linux kernel IPv6 routes on tun0
-            # Contiki-NG tunslip6 creates host routes (e.g. fd00::.../128 or fd00::... dev tun0)
             try:
                 proc = await asyncio.create_subprocess_exec(
                     "ip", "-6", "route", "show", "dev", "tun0",
@@ -130,9 +148,9 @@ class TunslipManager:
                 for line in stdout.decode().splitlines():
                     match = ip_regex.search(line)
                     if match:
-                        found_ip = match.group(1).rstrip(':').split('/')[0]
-                        if found_ip not in ("fd00::1", target_ip, "fd00::"):
-                            discovered_nodes.add(found_ip)
+                        valid = is_valid_mote_ip(match.group(1))
+                        if valid:
+                            discovered_nodes.add(valid)
             except Exception:
                 pass
 
@@ -147,9 +165,9 @@ class TunslipManager:
                 for line in stdout.decode().splitlines():
                     match = ip_regex.search(line)
                     if match:
-                        found_ip = match.group(1).rstrip(':')
-                        if found_ip not in ("fd00::1", target_ip):
-                            discovered_nodes.add(found_ip)
+                        valid = is_valid_mote_ip(match.group(1))
+                        if valid:
+                            discovered_nodes.add(valid)
             except Exception:
                 pass
 
@@ -164,9 +182,9 @@ class TunslipManager:
                                 html = await response.text()
                                 matches = ip_regex.findall(html)
                                 for match in matches:
-                                    cleaned_ip = match.rstrip(':')
-                                    if cleaned_ip not in ("fd00::1", target_ip):
-                                        discovered_nodes.add(cleaned_ip)
+                                    valid = is_valid_mote_ip(match)
+                                    if valid:
+                                        discovered_nodes.add(valid)
                 except Exception:
                     pass
 

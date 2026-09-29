@@ -193,15 +193,15 @@ async def handle_job_notification(job_data: dict):
                 # Signal other jobs in the group that tun0 is ready
                 g_state["tunslip_ready"].set()
 
-                # Discover nodes over the wireless mesh via Border Router HTTP page
-                print_status(job_id, device_id, "🔍 Discovering Contiki-NG wireless nodes via RPL...")
-                node_ips = await tunslip_manager.discover_nodes(br_ip, timeout=30.0)
+                # Discover nodes over the wireless mesh
+                print_status(job_id, device_id, "🔍 Discovering Contiki-NG wireless nodes via RPL (up to 60s)...")
+                node_ips = await tunslip_manager.discover_nodes(br_ip, timeout=60.0)
                 g_state["node_ips"] = node_ips
                 print_status(job_id, device_id, f"🎯 Discovered nodes: {node_ips}")
                 g_state["nodes_discovered"].set()
 
                 # Keep border router running for the duration of the group experiment
-                await asyncio.sleep(65)
+                await asyncio.sleep(180)
                 await tunslip_manager.stop_tunslip()
                 await update_job_status(job_id, "completed")
 
