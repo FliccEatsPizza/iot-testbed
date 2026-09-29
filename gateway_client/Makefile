@@ -29,7 +29,7 @@ build:
 	@echo "Building project in $(SRC_DIR)"
 	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
 		echo "Found existing Makefile in $(SRC_DIR), using it..."; \
-		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD); \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI); \
 	else \
 		mkdir -p $(SRC_DIR)/build; \
 		echo "CONTIKI_PROJECT = $$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile; \
@@ -55,7 +55,7 @@ flash:
 		if [ -z "$$PROJECT_NAME" ]; then \
 			PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
 		fi; \
-		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
 	else \
 		PROJECT_NAME=$$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g')); \
 		cd $(SRC_DIR)/build && make TARGET=$(TARGET) BOARD=$(BOARD) $$PROJECT_NAME.dfu-upload PORT=$(PORT); \
@@ -64,7 +64,7 @@ flash:
 clean:
 	@echo "Cleaning project in $(SRC_DIR)"
 	@if [ -f "$(SRC_DIR)/Makefile" ]; then \
-		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) clean; \
+		cd $(SRC_DIR) && make TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI) clean; \
 	else \
 		rm -rf $(SRC_DIR)/build; \
 		rm -f $(SRC_DIR)/*.$(TARGET) $(SRC_DIR)/*.hex $(SRC_DIR)/*.elf $(SRC_DIR)/*.bin $(SRC_DIR)/*.dfu; \
