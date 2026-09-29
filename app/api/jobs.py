@@ -82,21 +82,30 @@ async def upload_job_logs(
     job_id: int,
     log_file: UploadFile = File(...),
     x_gateway_token: str = Header(...),
+    x_gateway_id: Optional[int] = Header(None, alias="X-Gateway-ID"),
     db: Session = Depends(get_db),
 ):
-    # Verify gateway
-    gateway = GatewayService.get_gateway_by_token(x_gateway_token, db)
-    if not gateway:
-        raise HTTPException(status_code=403, detail="Invalid gateway token")
-    
-    # Verify job exists and belongs to this gateway
+    # Verify job exists
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     device = db.query(Device).filter(Device.id == job.device_id).first()
-    if not device or device.gateway_id != gateway.id:
-        raise HTTPException(status_code=403, detail="Job not associated with this gateway")
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    gateway = db.query(Gateway).filter(Gateway.id == device.gateway_id).first()
+    if not gateway:
+        raise HTTPException(status_code=404, detail="Gateway not found for this device")
+
+    # Verify gateway token matches the gateway that owns this device
+    token_hash = GatewayService.hash_token(x_gateway_token)
+    if gateway.token_hash != token_hash:
+        raise HTTPException(status_code=403, detail="Invalid gateway token")
+
+    # If X-Gateway-ID is provided, verify it matches
+    if x_gateway_id is not None and x_gateway_id != gateway.id:
+        raise HTTPException(status_code=403, detail=f"Job belongs to Gateway {gateway.id}, not Gateway {x_gateway_id}")
 
     # Save log file
     log_filename = f"{job_id}.txt"

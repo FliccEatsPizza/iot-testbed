@@ -670,7 +670,10 @@ async def upload_logs(job_id: int, log_path: str):
     try:
         print_status(job_id, message=f"📤 Uploading logs from {log_path}")
         upload_url = f"{SERVER_URL}/api/v1/jobs/{job_id}/logs"
-        headers = {"X-Gateway-Token": GATEWAY_TOKEN}
+        headers = {
+            "X-Gateway-Token": GATEWAY_TOKEN,
+            "X-Gateway-ID": str(GATEWAY_ID)
+        }
         
         async with aiohttp.ClientSession() as session:
             form_data = aiohttp.FormData()
