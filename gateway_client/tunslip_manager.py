@@ -136,6 +136,7 @@ class TunslipManager:
         start_time = asyncio.get_event_loop().time()
         logger.info(f"Starting RPL node discovery (timeout: {timeout}s)")
 
+        last_ping_nodes = []
         while asyncio.get_event_loop().time() - start_time < timeout:
             # Method 1: Check Linux kernel IPv6 routes on tun0
             try:
@@ -222,13 +223,15 @@ class TunslipManager:
                     print(f"🎯 Verified responsive HTTP (websense) mote(s): {http_nodes}")
                     logger.info(f"Verified responsive HTTP nodes: {http_nodes}")
                     return verified
-                elif ping_nodes:
-                    verified = ping_nodes + [n for n in discovered_nodes if n not in ping_nodes]
-                    print(f"🎯 Verified reachable ping mote(s): {ping_nodes}")
-                    logger.info(f"Verified reachable ping nodes: {ping_nodes}")
-                    return verified
+                if ping_nodes:
+                    last_ping_nodes = ping_nodes
 
             await asyncio.sleep(retry_interval)
+
+        if last_ping_nodes:
+            verified = last_ping_nodes + [n for n in discovered_nodes if n not in last_ping_nodes]
+            logger.info(f"Discovery timeout: returning reachable ping nodes {verified}")
+            return verified
 
         logger.info(f"Discovery completed with {len(discovered_nodes)} nodes found (fallback)")
         return list(discovered_nodes)

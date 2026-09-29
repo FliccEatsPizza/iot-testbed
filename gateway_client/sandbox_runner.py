@@ -145,7 +145,7 @@ async def run_sandbox_job(
             "TARGET_NODE=''\n"
             "if [ -n \"$CONTIKI_NODES\" ]; then\n"
             "  for node in $(echo \"$CONTIKI_NODES\" | tr ',' ' '); do\n"
-            "    if wget -q --spider -T 2 \"http://[$node]/\"; then\n"
+            "    if wget -q --spider -T 2 \"http://[$node]/\" 2>/dev/null; then\n"
             "      TARGET_NODE=\"$node\"\n"
             "      echo \"🎯 Found responsive HTTP mote: $TARGET_NODE\"\n"
             "      break\n"
