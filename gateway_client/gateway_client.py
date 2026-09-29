@@ -542,9 +542,33 @@ async def upload_logs_from_string(job_id: int, logs: str):
         f.write(logs)
     await upload_logs(job_id, log_path)
 
+async def reset_stuck_jobs_on_server():
+    """
+    On startup, call the backend's emergency rescue endpoint to mark any running
+    jobs as failed and free their devices. This handles the case where the gateway
+    was killed mid-job and left devices in 'busy' state.
+    """
+    try:
+        import aiohttp
+        url = f"{SERVER_URL}/api/v1/jobs/admin/reset-stuck"
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    n = data.get("reset_jobs", 0)
+                    if n > 0:
+                        print_status(message=f"🔧 Auto-rescued {n} stuck job(s) from previous session — devices freed")
+                    else:
+                        print_status(message="✅ No stuck jobs found on server")
+                else:
+                    print_status(message=f"⚠️ Server rescue endpoint returned {resp.status}")
+    except Exception as e:
+        print_status(message=f"⚠️ Could not reach server rescue endpoint: {e}")
+
 async def main():
     print_status(message="🏁 Starting gateway client")
     await cleanup_stale_containers()
+    await reset_stuck_jobs_on_server()
     await asyncio.gather(
         poll_for_download_notifications(),
         poll_for_job_notifications()
