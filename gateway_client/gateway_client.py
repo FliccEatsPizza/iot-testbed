@@ -19,6 +19,10 @@ MAX_CONCURRENT_JOBS = 6
 # Semaphore for concurrent job processing
 job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
 
+# Flash lock: serializes USB DFU flashing across physical dongles so parallel
+# jobs don't cause libusb race conditions during device reset / re-enumeration
+flash_lock = asyncio.Lock()
+
 # Group-level synchronization state for ordered multi-target execution
 # Structure: group_id -> {
 #   "tunslip_ready": asyncio.Event(),
@@ -441,110 +445,128 @@ async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
             await update_job_status(job_id, "failed")
 
 async def flash_device(job_id: int, device_id: int):
-    try:
-        print_status(job_id, device_id, "⚡ Starting flashing process")
+    async with flash_lock:
+        print_status(job_id, device_id, "⚡ Acquired flash lock, starting flashing process")
         port = get_device_port(device_id)
         if not port:
             raise Exception(f"Device {device_id} not found")
         
         source_path = f"./downloads/{job_id}"
         flash_cmd = ["make", "flash", f"PORT={port}", f"SRC_DIR={source_path}"]
-        print_status(job_id, device_id, f"⚡ Executing: {' '.join(flash_cmd)}")
         
-        proc = await asyncio.create_subprocess_exec(
-            *flash_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
-        )
-        
-        output_lines = []
-        timeout_seconds = 120.0
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout_seconds:
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
             try:
-                line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
-                if not line_bytes:
-                    if proc.returncode is not None:
-                        break
-                    continue
-                decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
-                if decoded:
-                    output_lines.append(decoded)
-                    print_status(job_id, device_id, f"[Flash] {decoded}")
-            except asyncio.TimeoutError:
-                if proc.returncode is not None:
-                    break
-                continue
-        
-        if proc.returncode is None:
-            proc.kill()
-            raise Exception(f"Flashing timed out after {int(timeout_seconds)} seconds")
-            
-        if proc.returncode != 0:
-            tail = "\n".join(output_lines[-10:])
-            raise Exception(f"Flashing process exited with code {proc.returncode}:\n{tail}")
-            
-        await update_job_status(job_id, "running")
-        print_status(job_id, device_id, "✅ Flashing completed successfully")
-        
-    except Exception as e:
-        await update_job_status(job_id, "failed")
-        print_status(job_id, device_id, f"🔴 Flashing failed: {str(e)}")
-        raise
+                print_status(job_id, device_id, f"⚡ Executing (attempt {attempt}/{max_attempts}): {' '.join(flash_cmd)}")
+                proc = await asyncio.create_subprocess_exec(
+                    *flash_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                
+                output_lines = []
+                timeout_seconds = 120.0
+                start_time = time.time()
+                
+                while time.time() - start_time < timeout_seconds:
+                    try:
+                        line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+                        if not line_bytes:
+                            if proc.returncode is not None:
+                                break
+                            continue
+                        decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
+                        if decoded:
+                            output_lines.append(decoded)
+                            print_status(job_id, device_id, f"[Flash] {decoded}")
+                    except asyncio.TimeoutError:
+                        if proc.returncode is not None:
+                            break
+                        continue
+                
+                if proc.returncode is None:
+                    proc.kill()
+                    raise Exception(f"Flashing timed out after {int(timeout_seconds)} seconds")
+                    
+                if proc.returncode != 0:
+                    tail = "\n".join(output_lines[-10:])
+                    if attempt < max_attempts:
+                        print_status(job_id, device_id, f"⚠️ Flash attempt {attempt} exited with code {proc.returncode} (device may have just entered DFU bootloader mode). Retrying in 3s...")
+                        await asyncio.sleep(3)
+                        continue
+                    raise Exception(f"Flashing process exited with code {proc.returncode}:\n{tail}")
+                    
+                await update_job_status(job_id, "running")
+                print_status(job_id, device_id, "✅ Flashing completed successfully")
+                return
+                
+            except Exception as e:
+                if attempt == max_attempts:
+                    await update_job_status(job_id, "failed")
+                    print_status(job_id, device_id, f"🔴 Flashing failed: {str(e)}")
+                    raise
 
 async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
     """Flash a pre-built DFU package directly using nrfutil — no compilation needed."""
-    try:
-        print_status(job_id, device_id, f"📦 Flashing pre-built DFU: {os.path.basename(dfu_path)}")
+    async with flash_lock:
+        print_status(job_id, device_id, "⚡ Acquired flash lock, starting DFU flashing process")
         port = get_device_port(device_id)
         if not port:
             raise Exception(f"Device {device_id} not found")
 
         flash_cmd = ["nrfutil", "dfu", "usb-serial", "-pkg", dfu_path, "-p", port, "-b", "115200"]
-        print_status(job_id, device_id, f"📦 Executing: {' '.join(flash_cmd)}")
-        
-        proc = await asyncio.create_subprocess_exec(
-            *flash_cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
-        )
-
-        output_lines = []
-        timeout_seconds = 120.0
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout_seconds:
+        max_attempts = 2
+        for attempt in range(1, max_attempts + 1):
             try:
-                line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
-                if not line_bytes:
-                    if proc.returncode is not None:
-                        break
-                    continue
-                decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
-                if decoded:
-                    output_lines.append(decoded)
-                    print_status(job_id, device_id, f"[DFU] {decoded}")
-            except asyncio.TimeoutError:
-                if proc.returncode is not None:
-                    break
-                continue
+                print_status(job_id, device_id, f"📦 Executing (attempt {attempt}/{max_attempts}): {' '.join(flash_cmd)}")
+                proc = await asyncio.create_subprocess_exec(
+                    *flash_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
 
-        if proc.returncode is None:
-            proc.kill()
-            raise Exception(f"DFU flashing timed out after {int(timeout_seconds)} seconds")
+                output_lines = []
+                timeout_seconds = 120.0
+                start_time = time.time()
+                
+                while time.time() - start_time < timeout_seconds:
+                    try:
+                        line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+                        if not line_bytes:
+                            if proc.returncode is not None:
+                                break
+                            continue
+                        decoded = line_bytes.decode('utf-8', errors='ignore').rstrip()
+                        if decoded:
+                            output_lines.append(decoded)
+                            print_status(job_id, device_id, f"[DFU] {decoded}")
+                    except asyncio.TimeoutError:
+                        if proc.returncode is not None:
+                            break
+                        continue
 
-        if proc.returncode != 0:
-            tail = "\n".join(output_lines[-10:])
-            raise Exception(f"DFU flash failed (code {proc.returncode}):\n{tail}")
+                if proc.returncode is None:
+                    proc.kill()
+                    raise Exception(f"DFU flashing timed out after {int(timeout_seconds)} seconds")
 
-        await update_job_status(job_id, "running")
-        print_status(job_id, device_id, "✅ DFU flashing completed successfully")
+                if proc.returncode != 0:
+                    tail = "\n".join(output_lines[-10:])
+                    if attempt < max_attempts:
+                        print_status(job_id, device_id, f"⚠️ DFU flash attempt {attempt} failed. Retrying in 3s...")
+                        await asyncio.sleep(3)
+                        continue
+                    raise Exception(f"DFU flash failed (code {proc.returncode}):\n{tail}")
 
-    except Exception as e:
-        await update_job_status(job_id, "failed")
-        print_status(job_id, device_id, f"🔴 DFU flashing failed: {str(e)}")
-        raise
+                await update_job_status(job_id, "running")
+                print_status(job_id, device_id, "✅ DFU flashing completed successfully")
+                return
+
+            except Exception as e:
+                if attempt == max_attempts:
+                    await update_job_status(job_id, "failed")
+                    print_status(job_id, device_id, f"🔴 DFU flashing failed: {str(e)}")
+                    raise
+
 
 async def collect_logs(job_id: int, device_id: int):
     try:
