@@ -259,9 +259,9 @@ async def handle_job_notification(job_data: dict):
                         print_status(job_id, device_id, "⏳ Waiting for Border Router tun0 to be ready (up to 120s)...")
                         await asyncio.wait_for(g_state["tunslip_ready"].wait(), timeout=120.0)
                         print_status(job_id, device_id, "🌐 tun0 is ready! Waiting for node discovery...")
-                        # Wait for nodes to be discovered over the RPL mesh
+                        # Wait for nodes to be discovered over the RPL mesh (up to 75s to allow physical mote flash & boot)
                         try:
-                            await asyncio.wait_for(g_state["nodes_discovered"].wait(), timeout=35.0)
+                            await asyncio.wait_for(g_state["nodes_discovered"].wait(), timeout=75.0)
                             print_status(job_id, device_id, "🎯 Node discovery complete! Launching sandbox...")
                         except asyncio.TimeoutError:
                             print_status(job_id, device_id, "⚠️ Node discovery timed out, launching sandbox with available targets...")
