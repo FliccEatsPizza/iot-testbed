@@ -12,9 +12,8 @@ class DeviceStatus(str, Enum):
     offline = "offline"
 
 class DeviceType(str, Enum):
-    physical = "physical"           # Standard USB-connected Contiki-NG / firmware node
-    border_router = "border_router" # RPL Border Router — USB-connected, runs tunslip6
-    sandbox = "sandbox"             # Virtual Pi Docker Sandbox execution target
+    physical = "physical"  # USB-connected Contiki-NG / firmware node (incl. border-router dongles)
+    sandbox = "sandbox"    # Virtual Pi Docker Sandbox execution target
 
 class JobStatus(str, Enum):
     preparing = "preparing"

@@ -153,19 +153,54 @@ async def handle_job_notification(job_data: dict):
             g_state = get_or_create_group_state(group_id)
             g_state["active_jobs"].add(job_id)
 
-            if job_data.get('has_border_router') or dtype == 'border_router':
+            if job_data.get('has_border_router'):
                 g_state["has_border_router"] = True
 
             print_status(job_id, device_id, f"🚀 Starting job processing [type={dtype}]")
 
-            # ----------------------------------------------------
-            # 1. BORDER ROUTER EXECUTION PATH
-            # ----------------------------------------------------
-            if dtype == 'border_router':
-                g_state["has_border_router"] = True
+            # -------------------------------------------------------
+            # Detect if this physical job is a border-router firmware
+            # by inspecting zip content (rpl-border-router Makefile).
+            # This replaces the old `border_router` device type.
+            # -------------------------------------------------------
+            job_dir = f"./downloads/{job_id}"
+            is_border_router_firmware = False
+            if os.path.isdir(job_dir):
+                for fname in os.listdir(job_dir):
+                    if fname.lower() == "makefile":
+                        try:
+                            with open(os.path.join(job_dir, fname), "r", errors="ignore") as mf:
+                                content = mf.read()
+                            if "rpl-border-router" in content or "border_router" in content.lower():
+                                is_border_router_firmware = True
+                                break
+                        except Exception:
+                            pass
+                # Also check sub-dirs for a Makefile containing rpl-border-router
+                if not is_border_router_firmware:
+                    for root, dirs, files in os.walk(job_dir):
+                        for fname in files:
+                            if fname.lower() == "makefile":
+                                try:
+                                    with open(os.path.join(root, fname), "r", errors="ignore") as mf:
+                                        content = mf.read()
+                                    if "rpl-border-router" in content or "border_router" in content.lower():
+                                        is_border_router_firmware = True
+                                        break
+                                except Exception:
+                                    pass
+                        if is_border_router_firmware:
+                            break
 
-                # Detect if job has a pre-built DFU package (manifest.json) or .dfu file
-                job_dir = f"./downloads/{job_id}"
+            if is_border_router_firmware:
+                g_state["has_border_router"] = True
+                print_status(job_id, device_id, "🌐 Detected border-router firmware — will start tunslip6 after flash")
+
+            # -------------------------------------------------------
+            # BORDER ROUTER PATH (detected from firmware content)
+            # -------------------------------------------------------
+            if is_border_router_firmware:
+                # Detect pre-built DFU package vs source
                 all_files = os.listdir(job_dir) if os.path.isdir(job_dir) else []
                 is_dfu_pkg = os.path.exists(os.path.join(job_dir, "manifest.json")) or any(f.endswith('.dfu') for f in all_files)
 
@@ -187,7 +222,7 @@ async def handle_job_notification(job_data: dict):
                 print_status(job_id, device_id, f"🌐 Spawning tunslip6 on {port} with prefix {tun_prefix}")
                 br_ip = await tunslip_manager.start_tunslip(port=port, prefix=tun_prefix)
                 print_status(job_id, device_id, f"✅ tunslip6 active. Border router IPv6: {br_ip or 'fd00::1'}")
-                
+
                 # Store br_ip so sandbox jobs can read it
                 g_state["br_ip"] = br_ip
 
@@ -206,10 +241,11 @@ async def handle_job_notification(job_data: dict):
                 await tunslip_manager.stop_tunslip()
                 await update_job_status(job_id, "completed")
 
-            # ----------------------------------------------------
-            # 2. VIRTUAL PI SANDBOX EXECUTION PATH
-            # ----------------------------------------------------
+            # -------------------------------------------------------
+            # VIRTUAL PI SANDBOX PATH
+            # -------------------------------------------------------
             elif dtype == 'sandbox':
+
                 # Wait for tunslip_ready if THIS job group includes a border_router job
                 if g_state["has_border_router"]:
                     try:

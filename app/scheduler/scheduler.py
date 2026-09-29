@@ -56,7 +56,9 @@ class JobScheduler:
 
             # Pre-compute all sandbox peer hostnames in this group
             sandbox_jobs = [j for j in jobs if device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "sandbox"]
-            has_border_router = any(device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "border_router" for j in jobs)
+            # has_border_router is no longer determined by device type (border_router type removed).
+            # The gateway_client detects it at runtime from the zip's Makefile content.
+            has_border_router = False
 
             for job in jobs:
                 job.status = JobStatus.running

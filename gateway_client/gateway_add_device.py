@@ -154,25 +154,25 @@ def main():
             exit(0)
 
     print(f"\nSelected Port: {selected['port']} ({selected['description']})")
-    
+
     # Select Device Role/Type
     print("\nSelect Device Role:")
-    print("  1. Standard Physical Node (flashes firmware, collects serial logs)")
-    print("  2. RPL Border Router (flashes border-router, runs tunslip6 IPv6 network)")
+    print("  1. Physical Node (flashes firmware via USB — use for ALL dongles, incl. border-router)")
+    print("  2. Sandbox (virtual Docker container — for Pi-based simulation nodes)")
     type_choice = input("Enter choice [1-2] (default 1): ").strip() or "1"
-    
-    device_type = "border_router" if type_choice == "2" else "physical"
-    
+
+    device_type = "sandbox" if type_choice == "2" else "physical"
+
     # Get device name from user
-    default_name = "pi-border-router" if device_type == "border_router" else "nrf52-node-1"
+    default_name = "pi-sandbox" if device_type == "sandbox" else "nrf52-node-1"
     name = input(f"Enter device name (default '{default_name}'): ").strip() or default_name
-    
+
     # Server registration
     server_response = add_device_to_server(name, device_type)
-    
+
     # Local storage
     store_device_mapping(server_response, selected, device_type)
-    
+
     print(f"\n🎉 Device '{name}' [{device_type}] successfully registered and ready for jobs!\n")
 
 if __name__ == "__main__":

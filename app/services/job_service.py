@@ -22,42 +22,49 @@ class JobService:
         job = db.query(Job).filter(Job.id == job_id).first()
         if not job:
             raise Exception("Job not found")
-        
+
+        # Apply the new status to the in-memory object BEFORE querying siblings.
+        # SQLAlchemy's identity map will return this same in-memory object when
+        # all_jobs is queried below, so the "all pending?" check sees the updated
+        # status without requiring a prior commit.
         job.status = status_update.status
         if status_update.output_file_id is not None:
             job.output_file_id = status_update.output_file_id
-        
+
         if status_update.status in [JobStatus.completed, JobStatus.failed]:
             job.completed_at = datetime.now(timezone.utc)
-            
+
             device = db.query(Device).filter(Device.id == job.device_id).first()
             if device:
                 device.status = DeviceStatus.available
                 device.last_seen = datetime.now(timezone.utc)
-                
+
         group = db.query(JobGroup).filter(JobGroup.id == job.group_id).first()
         if group:
+            # SQLAlchemy returns the already-mutated in-memory `job` object for
+            # this job_id, so statuses below reflect the new value set above.
             all_jobs = db.query(Job).filter(Job.group_id == group.id).all()
 
+            # All jobs compiled & ready → promote group so the scheduler dispatches
             if all(j.status == JobStatus.pending for j in all_jobs):
                 group.status = JobStatus.pending
-            
+
             if any(j.status == JobStatus.cancelled for j in all_jobs):
                 group.status = JobStatus.cancelled
                 for j in all_jobs:
                     j.status = JobStatus.cancelled
                     j.completed_at = datetime.now(timezone.utc)
-            
+
             if all(j.status in [JobStatus.completed, JobStatus.failed] for j in all_jobs):
                 group.completed_at = datetime.now(timezone.utc)
                 group.status = JobStatus.completed
                 if any(j.status == JobStatus.failed for j in all_jobs):
                     group.status = JobStatus.failed
-            
+
         try:
             db.commit()
         except Exception as e:
             db.rollback()
             raise Exception(str(e))
-        
+
         return {"message": "Job status updated successfully"}
