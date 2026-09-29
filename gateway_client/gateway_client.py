@@ -323,18 +323,30 @@ async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
             print_status(job_id, message="📁 Creating job directory")
             source_file_path = await download_file(job_id, file_id)
             
-            # Determine if this is a pre-built binary (DFU/zip) or source code
-            is_prebuilt = source_file_path and any(
-                source_file_path.endswith(ext) for ext in ('.dfu', '.zip', '.hex', '.bin')
-            )
-
-            # Auto-extract zip archives for sandbox jobs
-            if device_type == "sandbox" and source_file_path and source_file_path.endswith('.zip'):
+            # Always extract zip archives (for both sandbox and physical jobs)
+            is_prebuilt = source_file_path and any(source_file_path.endswith(ext) for ext in ('.dfu', '.hex', '.bin'))
+            
+            if source_file_path and source_file_path.endswith('.zip'):
                 import zipfile, shutil
-                print_status(job_id, message=f"📦 Extracting sandbox archive: {os.path.basename(source_file_path)}")
+                print_status(job_id, message=f"📦 Extracting archive: {os.path.basename(source_file_path)}")
                 try:
                     with zipfile.ZipFile(source_file_path, 'r') as zip_ref:
                         zip_ref.extractall(job_dir)
+                    
+                    # Check if it's a DFU package (contains manifest.json)
+                    if os.path.exists(os.path.join(job_dir, "manifest.json")):
+                        is_prebuilt = True
+                        print_status(job_id, message="📦 Detected DFU package (manifest.json found)")
+                    else:
+                        # If the zip had a single root folder, move everything up one level
+                        items = os.listdir(job_dir)
+                        items.remove(os.path.basename(source_file_path))
+                        if len(items) == 1 and os.path.isdir(os.path.join(job_dir, items[0])):
+                            root_folder = os.path.join(job_dir, items[0])
+                            for item in os.listdir(root_folder):
+                                shutil.move(os.path.join(root_folder, item), job_dir)
+                            os.rmdir(root_folder)
+                            
                     print_status(job_id, message="✅ Extraction completed")
                 except Exception as ex:
                     print_status(job_id, message=f"⚠️ Failed to extract zip: {ex}")
@@ -343,7 +355,7 @@ async def process_job(job_id: int, file_id: int, device_type: str = "physical"):
             if device_type != "sandbox" and not is_prebuilt:
                 await compile_source_code(job_id)
             elif is_prebuilt and device_type != "sandbox":
-                print_status(job_id, message=f"📦 Pre-built firmware detected ({os.path.basename(source_file_path)}), skipping compilation")
+                print_status(job_id, message=f"📦 Pre-built firmware detected, skipping compilation")
                 
             await update_job_status(job_id, "pending")
             
