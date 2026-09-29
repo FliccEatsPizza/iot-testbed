@@ -193,6 +193,9 @@ async def handle_job_notification(job_data: dict):
                                         break
                                 except Exception:
                                     pass
+                            elif "border" in fname.lower() or (fname.endswith(".c") and "root_start" in open(os.path.join(root, fname), "r", errors="ignore").read()):
+                                is_border_router_firmware = True
+                                break
                         if is_border_router_firmware:
                             break
 

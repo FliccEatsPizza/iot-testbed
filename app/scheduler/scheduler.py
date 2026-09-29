@@ -5,7 +5,7 @@ import logging
 from typing import List
 
 from ..database import SessionLocal
-from ..models.models import JobGroup, Job, Device, JobStatus, DeviceStatus
+from ..models.models import JobGroup, Job, Device, JobStatus, DeviceStatus, File
 from ..queue.redis_client import redis_client
 
 logger = logging.getLogger(__name__)
@@ -56,9 +56,14 @@ class JobScheduler:
 
             # Pre-compute all sandbox peer hostnames in this group
             sandbox_jobs = [j for j in jobs if device_map.get(j.device_id) and device_map[j.device_id].device_type.value == "sandbox"]
-            # has_border_router is no longer determined by device type (border_router type removed).
-            # The gateway_client detects it at runtime from the zip's Makefile content.
-            has_border_router = False
+            
+            # Detect if any job in this group includes border-router firmware
+            source_file_ids = [j.source_file_id for j in jobs if j.source_file_id]
+            files = db.query(File).filter(File.id.in_(source_file_ids)).all() if source_file_ids else []
+            file_map = {f.id: f.filename.lower() for f in files}
+            has_border_router = any("border" in file_map.get(j.source_file_id, "") for j in jobs)
+            if has_border_router:
+                logger.info(f"Job group {group.id} includes border-router firmware — synchronized mesh startup enabled")
 
             for job in jobs:
                 job.status = JobStatus.running
