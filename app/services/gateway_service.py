@@ -2,7 +2,7 @@ import secrets
 import hashlib
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-from ..models.models import Gateway, DeviceStatus, VerificationStatus
+from ..models.models import Gateway, Device, DeviceStatus, VerificationStatus
 from ..schemas.schemas import GatewayCreate, GatewayRegister
 
 class GatewayService:
