@@ -1,6 +1,6 @@
-# queue/redis_client.py
 import redis.asyncio as redis
 import json
+import asyncio
 from typing import Dict, Any, Optional
 from config import REDIS_URL
 
@@ -12,13 +12,12 @@ class RedisClient:
     async def init(self):
         if self._redis is None:
             self._redis = await redis.from_url(
-		self.redis_url,
-		max_connections=20,
-		decode_responses=True,
-		health_check_interval=10,
-		socket_keepalive=True,
-		retry_on_timeout=True
-	    )
+                self.redis_url,
+                max_connections=20,
+                decode_responses=True,
+                socket_keepalive=True,
+                retry_on_timeout=True
+            )
     
     async def close(self):
         if self._redis is not None:
@@ -30,10 +29,15 @@ class RedisClient:
     
     async def get_job(self, gateway_id: int) -> Optional[Dict[str, Any]]:
         queue_key = f"gateway:{gateway_id}:jobs"
-        result = await self._redis.brpop(queue_key, timeout=5)
-        if result:
-            _, job_data = result
-            return json.loads(job_data)
+        try:
+            result = await self._redis.brpop(queue_key, timeout=2)
+            if result:
+                _, job_data = result
+                return json.loads(job_data)
+        except (redis.TimeoutError, asyncio.TimeoutError, Exception) as e:
+            if "timeout" in str(e).lower():
+                return None
+            raise
         return None
 
     async def publish_status(self, job_id: int, status: str, message: str):
@@ -49,10 +53,15 @@ class RedisClient:
     
     async def get_download_notification(self, gateway_id: int) -> Optional[Dict[str, Any]]:
         queue_key = f"gateway:{gateway_id}:download_notifications"
-        result = await self._redis.brpop(queue_key, timeout=5)
-        if result:
-            _, notification_data = result
-            return json.loads(notification_data)
+        try:
+            result = await self._redis.brpop(queue_key, timeout=2)
+            if result:
+                _, notification_data = result
+                return json.loads(notification_data)
+        except (redis.TimeoutError, asyncio.TimeoutError, Exception) as e:
+            if "timeout" in str(e).lower():
+                return None
+            raise
         return None
 
 redis_client = RedisClient()

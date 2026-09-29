@@ -131,6 +131,23 @@ const Dashboard = () => {
     handleNavigation('submit-jobs');
   };
 
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+
+  const handleEmergencyReset = async () => {
+    if (!window.confirm('⚠️ Emergency Reset: This will mark ALL currently running jobs as FAILED and release their devices. Use only after a gateway crash. Continue?')) return;
+    setResetLoading(true);
+    setResetMessage('');
+    try {
+      const res = await axios.post(`${API_BASE_URL}/jobs/admin/reset-stuck`);
+      setResetMessage(`✅ Reset complete: ${res.data.reset_jobs} job(s) freed. Re-submit your job groups.`);
+      await handleRefresh();
+    } catch (e) {
+      setResetMessage(`❌ Reset failed: ${e.message}`);
+    }
+    setResetLoading(false);
+  };
+
   return (
     <Box sx={{ flexGrow: 1 }}>
       {/* Navbar */}
@@ -284,6 +301,7 @@ const Dashboard = () => {
                       startIcon={loading ? <CircularProgress size={20} /> : <RefreshIcon />}
                       disabled={loading}
                       sx={{ 
+                        mr: 2,
                         borderRadius: 2,
                         color: '#2196F3',
                         borderColor: '#2196F3',
@@ -297,8 +315,36 @@ const Dashboard = () => {
                     >
                       Refresh
                     </Button>
+                    <Tooltip title="Emergency: Reset all stuck running jobs to failed and free devices. Use after a gateway crash.">
+                      <Button
+                        variant="outlined"
+                        onClick={handleEmergencyReset}
+                        disabled={resetLoading}
+                        startIcon={resetLoading ? <CircularProgress size={20} /> : null}
+                        sx={{
+                          borderRadius: 2,
+                          color: '#d32f2f',
+                          borderColor: '#d32f2f',
+                          textTransform: 'uppercase',
+                          fontWeight: 500,
+                          '&:hover': {
+                            borderColor: '#b71c1c',
+                            backgroundColor: 'rgba(211, 47, 47, 0.04)',
+                          }
+                        }}
+                      >
+                        ⚠️ Emergency Reset
+                      </Button>
+                    </Tooltip>
                   </Box>
                 </Box>
+                {resetMessage && (
+                  <Box sx={{ mb: 2, p: 1.5, borderRadius: 1, backgroundColor: resetMessage.startsWith('✅') ? '#e8f5e9' : '#ffebee', border: `1px solid ${resetMessage.startsWith('✅') ? '#a5d6a7' : '#ef9a9a'}` }}>
+                    <Typography variant="body2" sx={{ color: resetMessage.startsWith('✅') ? '#2e7d32' : '#c62828', fontWeight: 500 }}>
+                      {resetMessage}
+                    </Typography>
+                  </Box>
+                )}
 
                 {loading ? (
                   <Box display="flex" justifyContent="center" my={4}>

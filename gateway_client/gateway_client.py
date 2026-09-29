@@ -47,6 +47,36 @@ def print_status(job_id=None, device_id=None, message=""):
     device_info = f"[Device {device_id}]" if device_id else ""
     print(f"{timestamp} {job_info}{device_info} {message}")
 
+async def cleanup_stale_containers():
+    """
+    On startup, kill any leftover sandbox-job-* Docker containers from a previously
+    crashed session so they don't block device slots or consume resources.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "ps", "-a",
+            "--filter", "name=sandbox-job-",
+            "--format", "{{.Names}}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        containers = [c.strip() for c in stdout.decode().strip().split('\n') if c.strip()]
+        if containers:
+            print_status(message=f"🧹 Found {len(containers)} stale sandbox container(s) from previous session")
+            for container in containers:
+                kill_proc = await asyncio.create_subprocess_exec(
+                    "docker", "rm", "-f", container,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await kill_proc.communicate()
+                print_status(message=f"🧹 Removed stale container: {container}")
+        else:
+            print_status(message="✅ No stale sandbox containers found")
+    except Exception as e:
+        print_status(message=f"⚠️ Could not clean stale containers (Docker may not be running): {e}")
+
 async def detect_border_router_from_tun0() -> "Optional[str]":
     """
     When tunslip6 is running externally (manually), detect the border router's
@@ -514,6 +544,7 @@ async def upload_logs_from_string(job_id: int, logs: str):
 
 async def main():
     print_status(message="🏁 Starting gateway client")
+    await cleanup_stale_containers()
     await asyncio.gather(
         poll_for_download_notifications(),
         poll_for_job_notifications()

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timezone
 import os
 
 from ..config import settings
@@ -10,12 +11,50 @@ from ..schemas.schemas import JobSchema, JobStatusUpdate, UserSchema
 from ..api.auth import get_current_user_dependency
 from ..services.job_service import JobService
 from ..services.gateway_service import GatewayService
-from ..models.models import Job, Device
+from ..models.models import Job, JobGroup, Device, JobStatus, DeviceStatus
 
 router = APIRouter(
     prefix="/jobs",
     tags=["jobs"]
 )
+
+@router.post("/admin/reset-stuck", tags=["admin"])
+def reset_stuck_jobs(db: Session = Depends(get_db)):
+    """
+    Emergency rescue: marks all 'running' jobs as 'failed', frees their devices back to
+    'available', and fixes job groups stuck in 'running'. Use this after a gateway crash.
+    """
+    now = datetime.now(timezone.utc)
+
+    # 1. Find and fail all running jobs
+    stuck_jobs = db.query(Job).filter(Job.status == JobStatus.running).all()
+    freed_device_ids = set()
+    for job in stuck_jobs:
+        job.status = JobStatus.failed
+        job.completed_at = now
+        freed_device_ids.add(job.device_id)
+
+    # 2. Free devices that were held by those jobs
+    for device_id in freed_device_ids:
+        device = db.query(Device).filter(Device.id == device_id).first()
+        if device:
+            device.status = DeviceStatus.available
+            device.last_seen = now
+
+    # 3. Fix job groups whose jobs are all now terminal
+    for group in db.query(JobGroup).filter(JobGroup.status == JobStatus.running).all():
+        all_jobs = db.query(Job).filter(Job.group_id == group.id).all()
+        terminal = {JobStatus.completed, JobStatus.failed, JobStatus.cancelled}
+        if all(j.status in terminal for j in all_jobs):
+            group.status = JobStatus.failed
+            group.completed_at = now
+
+    db.commit()
+    return {
+        "reset_jobs": len(stuck_jobs),
+        "freed_devices": list(freed_device_ids),
+        "message": "Reset complete. All running jobs are now failed, devices freed. Re-submit your job groups."
+    }
 
 @router.get("/", response_model=List[JobSchema])
 def get_jobs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

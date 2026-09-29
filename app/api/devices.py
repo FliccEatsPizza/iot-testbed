@@ -46,3 +46,11 @@ def delete_device(device_id: int, db: Session = Depends(get_db)):
         return DeviceService.delete_device_service(device_id, db)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/reset-all-available", tags=["admin"])
+def reset_all_devices_to_available(db: Session = Depends(get_db)):
+    """Emergency reset: sets ALL devices to 'available'. Use after a gateway crash."""
+    from ..models.models import DeviceStatus
+    db.query(Device).update({"status": DeviceStatus.available})
+    db.commit()
+    return {"message": "All devices reset to available"}
