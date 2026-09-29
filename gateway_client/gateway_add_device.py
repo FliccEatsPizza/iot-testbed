@@ -19,7 +19,6 @@ def get_device_port(device_id: int) -> str:
 def get_device_by_port(port: str):
     """Retrieve existing mapping for a given port if any"""
     with sqlite3.connect(DB_PATH) as conn:
-        # Check if device_type column exists
         cur = conn.execute("PRAGMA table_info(devices)")
         cols = [c[1] for c in cur.fetchall()]
         if "device_type" in cols:
@@ -27,6 +26,34 @@ def get_device_by_port(port: str):
         else:
             cur = conn.execute("SELECT device_id, name, 'physical' as device_type FROM devices WHERE port = ?", (port,))
         return cur.fetchone()
+
+def get_connected_device_status():
+    """
+    Check which registered devices are currently connected vs unplugged.
+    Returns (active_device_ids, inactive_device_ids).
+    """
+    import os
+    import serial.tools.list_ports
+
+    current_ports = {p.device for p in serial.tools.list_ports.comports()}
+    active_ids = []
+    inactive_ids = []
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute("SELECT device_id, port, device_type FROM devices")
+            for dev_id, port, dtype in cur.fetchall():
+                if dtype == 'sandbox':
+                    active_ids.append(dev_id)
+                else:
+                    if port in current_ports or os.path.exists(port):
+                        active_ids.append(dev_id)
+                    else:
+                        inactive_ids.append(dev_id)
+    except Exception:
+        pass
+
+    return active_ids, inactive_ids
 
 def initialize_database():
     """Create database and table if they don't exist"""

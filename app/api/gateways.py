@@ -45,7 +45,8 @@ def verify_token(token_data: GatewayTokenVerify, db: Session = Depends(get_db)):
 @router.post("/{gateway_id}/heartbeat")
 def gateway_heartbeat(gateway_id: int, heartbeat: GatewayHeartbeat, db: Session = Depends(get_db)):
     try:
-        return GatewayService.gateway_heartbeat_service(gateway_id, heartbeat.active_device_ids, db)
+        inactive = heartbeat.inactive_device_ids or []
+        return GatewayService.gateway_heartbeat_service(gateway_id, heartbeat.active_device_ids, inactive, db)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
     

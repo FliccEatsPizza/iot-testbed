@@ -41,6 +41,7 @@ class GatewayRegister(BaseModel):
 
 class GatewayHeartbeat(BaseModel):
     active_device_ids: List[int]
+    inactive_device_ids: Optional[List[int]] = []
 
 class GatewayTokenVerify(BaseModel):
     token: str

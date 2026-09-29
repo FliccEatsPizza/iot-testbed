@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 from redis_client import redis_client
-from gateway_add_device import get_device_port
+from gateway_add_device import get_device_port, get_connected_device_status
 from tunslip_manager import tunslip_manager
 from sandbox_runner import run_sandbox_job, cleanup_sandbox
 import serial_asyncio
@@ -717,13 +717,35 @@ async def reset_stuck_jobs_on_server():
     except Exception as e:
         print_status(message=f"⚠️ Could not reach server rescue endpoint: {e}")
 
+async def send_heartbeat_loop():
+    """
+    Periodically report connected vs disconnected physical/virtual devices to the server.
+    If a dongle is unplugged, the server marks it offline so the frontend hides it in real time.
+    """
+    print_status(message="💓 Started heartbeat loop (reporting device presence every 3s)")
+    heartbeat_url = f"{SERVER_URL}/api/v1/gateways/{GATEWAY_ID}/heartbeat"
+    while True:
+        try:
+            active_ids, inactive_ids = get_connected_device_status()
+            payload = {
+                "active_device_ids": active_ids,
+                "inactive_device_ids": inactive_ids
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(heartbeat_url, json=payload, timeout=aiohttp.ClientTimeout(total=4)) as response:
+                    pass
+        except Exception:
+            pass
+        await asyncio.sleep(3)
+
 async def main():
     print_status(message="🏁 Starting gateway client")
     await cleanup_stale_containers()
     await reset_stuck_jobs_on_server()
     await asyncio.gather(
         poll_for_download_notifications(),
-        poll_for_job_notifications()
+        poll_for_job_notifications(),
+        send_heartbeat_loop()
     )
 
 if __name__ == "__main__":

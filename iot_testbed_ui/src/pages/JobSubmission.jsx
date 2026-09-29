@@ -43,7 +43,27 @@ const JobSubmission = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchActiveDevices = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const res = await axios.get(`${API_BASE_URL}/devices/`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const activeDevices = (res.data || []).filter((d) => d.status !== 'offline');
+        setDevices(activeDevices);
+
+        // If a selected device was unplugged, automatically deselect it
+        setSelectedDevices((prev) =>
+          prev.filter((sel) => activeDevices.some((d) => d.id === sel.device_id))
+        );
+      } catch (err) {
+        // Silently ignore background polling errors
+      }
+    };
+
+    const initialLoad = async () => {
       try {
         setLoading(true);
         const token = localStorage.getItem('token');
@@ -53,22 +73,30 @@ const JobSubmission = () => {
           return;
         }
 
-        const devicesResponse = await axios.get(`${API_BASE_URL}/devices/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setDevices(devicesResponse.data);
+        const [devicesResponse, filesResponse] = await Promise.all([
+          axios.get(`${API_BASE_URL}/devices/`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_BASE_URL}/files/`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-        const filesResponse = await axios.get(`${API_BASE_URL}/files/`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setFiles(filesResponse.data);
+        const active = (devicesResponse.data || []).filter((d) => d.status !== 'offline');
+        setDevices(active);
+        setFiles(filesResponse.data || []);
         setLoading(false);
       } catch (err) {
         setError('Failed to load devices or files');
         setLoading(false);
       }
     };
-    fetchData();
+
+    initialLoad();
+
+    // Poll every 3 seconds so unplugging/plugging dongles updates dynamically
+    const interval = setInterval(fetchActiveDevices, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleDeviceToggle = (deviceId) => {

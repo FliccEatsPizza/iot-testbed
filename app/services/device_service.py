@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from ..models.models import Device, DeviceStatus, Gateway
 from ..schemas.schemas import DeviceCreate
@@ -29,8 +29,28 @@ class DeviceService:
         return db_device
 
     @staticmethod
-    def get_devices_service(db: Session, skip: int = 0, limit: int = 100):
-        return db.query(Device).offset(skip).limit(limit).all()
+    def get_devices_service(db: Session, skip: int = 0, limit: int = 100, active_only: bool = True):
+        now = datetime.now(timezone.utc)
+        # 1. Any device that hasn't reported a heartbeat recently (> 15 seconds) is marked offline
+        # unless it is currently busy executing a job
+        threshold = now - timedelta(seconds=15)
+        stale_devices = db.query(Device).filter(
+            Device.last_seen < threshold,
+            Device.status != DeviceStatus.busy,
+            Device.status != DeviceStatus.offline
+        ).all()
+        if stale_devices:
+            for d in stale_devices:
+                d.status = DeviceStatus.offline
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        query = db.query(Device)
+        if active_only:
+            query = query.filter(Device.status != DeviceStatus.offline)
+        return query.offset(skip).limit(limit).all()
 
     @staticmethod
     def get_device_service(device_id: int, db: Session):

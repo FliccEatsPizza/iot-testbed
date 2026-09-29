@@ -20,9 +20,9 @@ def create_device(device: DeviceCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/", response_model=List[DeviceSchema])
-def get_devices(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+def get_devices(skip: int = 0, limit: int = 100, active_only: bool = True, db: Session = Depends(get_db)):
     try:
-        return DeviceService.get_devices_service(db, skip, limit)
+        return DeviceService.get_devices_service(db, skip, limit, active_only=active_only)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 

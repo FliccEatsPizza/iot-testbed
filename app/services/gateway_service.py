@@ -85,21 +85,29 @@ class GatewayService:
         return gateway
 
     @staticmethod
-    def gateway_heartbeat_service(gateway_id: int, active_device_ids: list[int], db: Session):
+    def gateway_heartbeat_service(gateway_id: int, active_device_ids: list[int], inactive_device_ids: list[int], db: Session):
         gateway = db.query(Gateway).filter(Gateway.id == gateway_id).first()
         if not gateway:
             raise Exception("Gateway not found")
-        gateway.last_seen = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        gateway.last_seen = now
         if gateway.status == DeviceStatus.offline:
             gateway.status = DeviceStatus.available
 
-        devices = gateway.devices
-        for device in devices:
-            if device.id in active_device_ids:
-                device.last_seen = datetime.now(timezone.utc)
+        # Devices reported as active and plugged in
+        if active_device_ids:
+            devices = db.query(Device).filter(Device.id.in_(active_device_ids)).all()
+            for device in devices:
+                device.last_seen = now
                 if device.status == DeviceStatus.offline:
                     device.status = DeviceStatus.available
-            else:
-                device.status = DeviceStatus.offline
+
+        # Devices reported as unplugged / missing by the gateway
+        if inactive_device_ids:
+            devices = db.query(Device).filter(Device.id.in_(inactive_device_ids)).all()
+            for device in devices:
+                if device.status != DeviceStatus.busy:
+                    device.status = DeviceStatus.offline
+
         db.commit()
         return {"message": "Gateway and devices heartbeat updated"}

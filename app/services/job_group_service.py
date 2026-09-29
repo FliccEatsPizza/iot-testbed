@@ -17,6 +17,10 @@ class JobGroupService:
         devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
         if len(devices) != len(device_ids):
             raise Exception("One or more devices not found")
+
+        offline_devices = [d.name for d in devices if d.status == DeviceStatus.offline]
+        if offline_devices:
+            raise Exception(f"Device(s) are currently unplugged / offline: {', '.join(offline_devices)}")
         
         device_map = {device.id: device for device in devices}
         
