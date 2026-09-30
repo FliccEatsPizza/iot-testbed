@@ -1,5 +1,6 @@
 import secrets
 import hashlib
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from ..models.models import Gateway, Device, DeviceStatus, VerificationStatus
@@ -23,15 +24,19 @@ class GatewayService:
 
     @staticmethod
     def verify_gateway_service(verify: GatewayRegister, db: Session):
-        gateway = db.query(Gateway).filter(Gateway.name == verify.name).first()
+        name = verify.name.strip()
+        token = verify.token.strip()
+        gateway = db.query(Gateway).filter(
+            (Gateway.name == name) | (func.trim(Gateway.name) == name) | (func.lower(func.trim(Gateway.name)) == name.lower())
+        ).first()
         if not gateway:
-            raise Exception("Gateway not found")
-        if gateway.verification_status == VerificationStatus.verified:
-            raise Exception("Gateway already verified")
-        token_hash = GatewayService.hash_token(verify.token)
+            raise Exception(f"Gateway '{name}' not found. Make sure you created it on the dashboard first.")
+        token_hash = GatewayService.hash_token(token)
         if token_hash != gateway.token_hash:
-            raise Exception("Invalid token")
+            raise Exception("Invalid registration token")
         gateway.verification_status = VerificationStatus.verified
+        gateway.status = DeviceStatus.available
+        gateway.last_seen = datetime.now(timezone.utc)
         db.commit()
         db.refresh(gateway)
         return gateway
