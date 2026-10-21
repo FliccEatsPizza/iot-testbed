@@ -606,24 +606,55 @@ async def ensure_idle_firmware_built() -> bool:
 
     print_status(message="🔨 Building idle standby firmware package (first-time setup)...")
     try:
+        # Augment PATH with toolchain and user bin locations
+        env = os.environ.copy()
+        extra_paths = [
+            "/home/pi/arm-gnu-toolchain-13.3.rel1-aarch64-arm-none-eabi/bin",
+            os.path.expanduser("~/arm-gnu-toolchain-13.3.rel1-aarch64-arm-none-eabi/bin"),
+            "/home/pi/.local/bin",
+            os.path.expanduser("~/.local/bin"),
+            "/usr/local/bin"
+        ]
+        current_path = env.get("PATH", "")
+        for p in extra_paths:
+            if os.path.isdir(p) and p not in current_path:
+                current_path = f"{p}:{current_path}"
+        env["PATH"] = current_path
+
         # 1. Compile idle firmware
         build_cmd = ["make", "-C", IDLE_FIRMWARE_DIR, "TARGET=nrf52840", "BOARD=dongle"]
         proc = await asyncio.create_subprocess_exec(
             *build_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
+            stderr=asyncio.subprocess.STDOUT,
+            env=env
         )
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
             print_status(message=f"⚠️ Failed to build idle firmware:\n{stdout.decode('utf-8', errors='ignore')}")
             return False
 
-        # 2. Package into DFU zip
+        # 2. Check or generate hex file via arm-none-eabi-objcopy
         hex_file = os.path.join(IDLE_FIRMWARE_DIR, "build", "nrf52840", "dongle", "idle-node.hex")
+        elf_file = os.path.join(IDLE_FIRMWARE_DIR, "build", "nrf52840", "dongle", "idle-node.nrf52840")
+        if not os.path.exists(hex_file) and os.path.exists(elf_file):
+            objcopy_cmd = ["arm-none-eabi-objcopy", "-O", "ihex", elf_file, hex_file]
+            proc = await asyncio.create_subprocess_exec(
+                *objcopy_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                env=env
+            )
+            stdout, _ = await proc.communicate()
+            if proc.returncode != 0:
+                print_status(message=f"⚠️ Failed to objcopy idle firmware:\n{stdout.decode('utf-8', errors='ignore')}")
+                return False
+
         if not os.path.exists(hex_file):
             print_status(message=f"⚠️ Idle firmware hex not found at {hex_file}")
             return False
 
+        # 3. Package into DFU zip
         pkg_cmd = [
             "nrfutil", "pkg", "generate",
             "--hw-version", "52",
@@ -635,7 +666,8 @@ async def ensure_idle_firmware_built() -> bool:
         proc = await asyncio.create_subprocess_exec(
             *pkg_cmd,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT
+            stderr=asyncio.subprocess.STDOUT,
+            env=env
         )
         stdout, _ = await proc.communicate()
         if proc.returncode != 0:
