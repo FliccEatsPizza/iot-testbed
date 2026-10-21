@@ -16,6 +16,22 @@ import serial_asyncio
 from config import GATEWAY_ID, GATEWAY_TOKEN, SERVER_URL, DOWNLOAD_DIR, FLASH_IDLE_AFTER_JOB, IDLE_RESET_MODE
 MAX_CONCURRENT_JOBS = 6
 
+# Augment system PATH with toolchain, nrfutil virtualenv, and user bin locations
+EXTRA_SYSTEM_PATHS = [
+    "/home/pi/arm-gnu-toolchain-13.3.rel1-aarch64-arm-none-eabi/bin",
+    os.path.expanduser("~/arm-gnu-toolchain-13.3.rel1-aarch64-arm-none-eabi/bin"),
+    "/home/pi/nrfutil-env/bin",
+    os.path.expanduser("~/nrfutil-env/bin"),
+    "/home/pi/.local/bin",
+    os.path.expanduser("~/.local/bin"),
+    "/usr/local/bin"
+]
+current_path = os.environ.get("PATH", "")
+for p in EXTRA_SYSTEM_PATHS:
+    if os.path.isdir(p) and p not in current_path:
+        current_path = f"{p}:{current_path}"
+os.environ["PATH"] = current_path
+
 # Semaphore for concurrent job processing
 job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
 
@@ -531,7 +547,7 @@ async def flash_device(job_id: int, device_id: int):
                     print_status(job_id, device_id, f"🔴 Flashing failed: {str(e)}")
                     raise
 
-async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
+async def flash_dfu(job_id: int, device_id: int, dfu_path: str, update_status: bool = True):
     """Flash a pre-built DFU package directly using nrfutil — no compilation needed."""
     async with flash_lock:
         print_status(job_id, device_id, "⚡ Acquired flash lock, starting DFU flashing process")
@@ -582,13 +598,15 @@ async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
                         continue
                     raise Exception(f"DFU flash failed (code {proc.returncode}):\n{tail}")
 
-                await update_job_status(job_id, "running")
+                if update_status:
+                    await update_job_status(job_id, "running")
                 print_status(job_id, device_id, "✅ DFU flashing completed successfully")
                 return
 
             except Exception as e:
                 if attempt == max_attempts:
-                    await update_job_status(job_id, "failed")
+                    if update_status:
+                        await update_job_status(job_id, "failed")
                     print_status(job_id, device_id, f"🔴 DFU flashing failed: {str(e)}")
                     raise
 
@@ -700,7 +718,7 @@ async def reset_device_to_idle(job_id: int, device_id: int):
 
     print_status(job_id, device_id, "💤 Resetting device to clean idle state (Radio OFF)...")
     try:
-        await flash_dfu(job_id, device_id, IDLE_FIRMWARE_ZIP)
+        await flash_dfu(job_id, device_id, IDLE_FIRMWARE_ZIP, update_status=False)
         # Give the USB port 3 seconds to re-enumerate as a clean CDC ACM device
         print_status(job_id, device_id, "⏳ Waiting 3s for USB port to re-enumerate after idle reset...")
         await asyncio.sleep(3)
