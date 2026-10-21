@@ -13,7 +13,7 @@ from sandbox_runner import run_sandbox_job, cleanup_sandbox
 import serial_asyncio
 
 # Gateway configuration
-from config import GATEWAY_ID, GATEWAY_TOKEN, SERVER_URL, DOWNLOAD_DIR
+from config import GATEWAY_ID, GATEWAY_TOKEN, SERVER_URL, DOWNLOAD_DIR, FLASH_IDLE_AFTER_JOB, IDLE_RESET_MODE
 MAX_CONCURRENT_JOBS = 6
 
 # Semaphore for concurrent job processing
@@ -27,6 +27,7 @@ flash_lock = asyncio.Lock()
 # Structure: group_id -> {
 #   "tunslip_ready": asyncio.Event(),
 #   "nodes_discovered": asyncio.Event(),
+#   "group_done": asyncio.Event(),
 #   "node_ips": list[str],
 #   "has_border_router": bool,
 #   "active_jobs": set[int]
@@ -38,6 +39,7 @@ def get_or_create_group_state(group_id: int) -> Dict[str, Any]:
         group_state[group_id] = {
             "tunslip_ready": asyncio.Event(),
             "nodes_discovered": asyncio.Event(),
+            "group_done": asyncio.Event(),
             "node_ips": [],
             "has_border_router": False,
             "active_jobs": set()
@@ -246,6 +248,10 @@ async def handle_job_notification(job_data: dict):
                 # Keep border router running for the duration of the group experiment
                 await asyncio.sleep(180)
                 await tunslip_manager.stop_tunslip()
+                # Signal other jobs in the group that border router is stopping
+                g_state["group_done"].set()
+                # Reset border router dongle to silent idle firmware
+                await reset_device_to_idle(job_id, device_id)
                 await update_job_status(job_id, "completed")
 
             # -------------------------------------------------------
@@ -305,6 +311,17 @@ async def handle_job_notification(job_data: dict):
                     await collect_logs(job_id, device_id)
                 except Exception as log_err:
                     print_status(job_id, device_id, f"⚠️ Serial log collection ended: {log_err}")
+
+                # If running as part of a group with a border router, keep mote active until group finishes
+                if g_state.get("has_border_router") and IDLE_RESET_MODE == "with_group":
+                    print_status(job_id, device_id, "⏳ Keeping mote active for group experiment duration...")
+                    try:
+                        await asyncio.wait_for(g_state["group_done"].wait(), timeout=180.0)
+                    except asyncio.TimeoutError:
+                        pass
+
+                # Reset device to silent idle firmware
+                await reset_device_to_idle(job_id, device_id)
                 await update_job_status(job_id, "completed")
 
             print_status(job_id, device_id, "✅ Job processing completed")
@@ -313,6 +330,11 @@ async def handle_job_notification(job_data: dict):
             print_status(message=f"🔴 Invalid job format: {str(e)}")
         except Exception as e:
             print_status(job_id, device_id, f"🔴 Job processing failed: {str(e)}")
+            if dtype != 'sandbox':
+                try:
+                    await reset_device_to_idle(job_id, device_id)
+                except Exception:
+                    pass
             await update_job_status(job_id, "failed")
 
 async def download_file(job_id: int, file_id: int) -> str:
@@ -571,6 +593,89 @@ async def flash_dfu(job_id: int, device_id: int, dfu_path: str):
                     raise
 
 
+IDLE_FIRMWARE_DIR = os.path.join(os.path.dirname(__file__), "idle_firmware")
+IDLE_FIRMWARE_ZIP = os.path.join(IDLE_FIRMWARE_DIR, "idle-node.zip")
+
+async def ensure_idle_firmware_built() -> bool:
+    """
+    Ensure the idle standby firmware package (idle-node.zip) exists.
+    If not, compile it using Contiki-NG and package with nrfutil.
+    """
+    if os.path.exists(IDLE_FIRMWARE_ZIP):
+        return True
+
+    print_status(message="🔨 Building idle standby firmware package (first-time setup)...")
+    try:
+        # 1. Compile idle firmware
+        build_cmd = ["make", "-C", IDLE_FIRMWARE_DIR, "TARGET=nrf52840", "BOARD=dongle"]
+        proc = await asyncio.create_subprocess_exec(
+            *build_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            print_status(message=f"⚠️ Failed to build idle firmware:\n{stdout.decode('utf-8', errors='ignore')}")
+            return False
+
+        # 2. Package into DFU zip
+        hex_file = os.path.join(IDLE_FIRMWARE_DIR, "build", "nrf52840", "dongle", "idle-node.hex")
+        if not os.path.exists(hex_file):
+            print_status(message=f"⚠️ Idle firmware hex not found at {hex_file}")
+            return False
+
+        pkg_cmd = [
+            "nrfutil", "pkg", "generate",
+            "--hw-version", "52",
+            "--sd-req", "0x00",
+            "--debug-mode",
+            "--application", hex_file,
+            IDLE_FIRMWARE_ZIP
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *pkg_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT
+        )
+        stdout, _ = await proc.communicate()
+        if proc.returncode != 0:
+            print_status(message=f"⚠️ Failed to package idle firmware:\n{stdout.decode('utf-8', errors='ignore')}")
+            return False
+
+        print_status(message=f"✅ Idle standby firmware package ready at {IDLE_FIRMWARE_ZIP}")
+        return True
+    except Exception as e:
+        print_status(message=f"⚠️ Error preparing idle firmware: {e}")
+        return False
+
+async def reset_device_to_idle(job_id: int, device_id: int):
+    """
+    Flash the silent idle firmware to the physical device.
+    Turns off 802.15.4 radio, turns off LEDs, and maintains USB CDC-ACM.
+    """
+    if not FLASH_IDLE_AFTER_JOB:
+        return
+
+    port = get_device_port(device_id)
+    if not port:
+        print_status(job_id, device_id, "⚠️ Cannot reset to idle: Port not found")
+        return
+
+    ready = await ensure_idle_firmware_built()
+    if not ready or not os.path.exists(IDLE_FIRMWARE_ZIP):
+        print_status(job_id, device_id, "⚠️ Idle firmware package not available, skipping idle reset")
+        return
+
+    print_status(job_id, device_id, "💤 Resetting device to clean idle state (Radio OFF)...")
+    try:
+        await flash_dfu(job_id, device_id, IDLE_FIRMWARE_ZIP)
+        # Give the USB port 3 seconds to re-enumerate as a clean CDC ACM device
+        print_status(job_id, device_id, "⏳ Waiting 3s for USB port to re-enumerate after idle reset...")
+        await asyncio.sleep(3)
+        print_status(job_id, device_id, "✅ Device is now in clean idle standby mode (Radio OFF, LEDs OFF)")
+    except Exception as e:
+        print_status(job_id, device_id, f"⚠️ Failed to flash idle firmware: {e}")
+
 async def collect_logs(job_id: int, device_id: int):
     try:
         print_status(job_id, device_id, "📝 Starting log collection")
@@ -748,6 +853,7 @@ async def main():
     print_status(message="🏁 Starting gateway client")
     await cleanup_stale_containers()
     await reset_stuck_jobs_on_server()
+    await ensure_idle_firmware_built()
     await asyncio.gather(
         poll_for_download_notifications(),
         poll_for_job_notifications(),

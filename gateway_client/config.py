@@ -1,14 +1,18 @@
 import os
 
-# Base server host defaults to your laptop's current Wi-Fi IP (10.154.202.158)
+# Base server host defaults to server IP (172.28.8.13)
 # Can be overridden via SERVER_HOST or SERVER_URL environment variable if needed.
-SERVER_HOST = os.getenv("SERVER_HOST", "10.154.202.158")
+SERVER_HOST = os.getenv("SERVER_HOST", "172.28.8.13")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "8000"))
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 SERVER_URL = os.getenv("SERVER_URL", f"http://{SERVER_HOST}:{SERVER_PORT}")
 API_BASE_URL = os.getenv("API_BASE_URL", f"{SERVER_URL}/api/v1")
 REDIS_URL = os.getenv("REDIS_URL", f"redis://{SERVER_HOST}:{REDIS_PORT}/0")
+
+# Automatic reset to silent idle firmware after experiment
+FLASH_IDLE_AFTER_JOB = os.getenv("FLASH_IDLE_AFTER_JOB", "true").lower() in ("true", "1", "yes")
+IDLE_RESET_MODE = os.getenv("IDLE_RESET_MODE", "with_group").lower()
 
 def _get_default_gateway_id():
     id_file = os.path.join(os.path.dirname(__file__), "gateway_id.txt")

@@ -88,6 +88,12 @@ clean:
 		rm -f $(SRC_DIR)/*.$(TARGET) $(SRC_DIR)/*.hex $(SRC_DIR)/*.elf $(SRC_DIR)/*.bin $(SRC_DIR)/*.dfu; \
 	fi
 
+idle-firmware:
+	@echo "Building idle firmware DFU package..."
+	@$(MAKE) -C $(BASE_DIR)/idle_firmware TARGET=$(TARGET) BOARD=$(BOARD) CONTIKI=$(CONTIKI)
+	@nrfutil pkg generate --hw-version 52 --sd-req 0x00 --debug-mode --application $(BASE_DIR)/idle_firmware/build/$(TARGET)/$(BOARD)/idle-node.hex $(BASE_DIR)/idle_firmware/idle-node.zip
+	@echo "Idle firmware package created at $(BASE_DIR)/idle_firmware/idle-node.zip"
+
 # Default target
-.PHONY: build flash clean
+.PHONY: build flash clean idle-firmware
 all: build
