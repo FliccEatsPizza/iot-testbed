@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { AppBar, Toolbar, Typography, Button, Box } from '@mui/material';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -75,7 +75,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/register" element={<Navigate to="/login" replace />} />
         <Route path="/submit-jobs" element={<JobSubmission />} />
         <Route path="/files" element={<FileManagement />} />
         <Route path="/add-gateway" element={<AddGateway />} />

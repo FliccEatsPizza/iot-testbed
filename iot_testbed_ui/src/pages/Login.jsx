@@ -7,6 +7,9 @@ import LockIcon from '@mui/icons-material/Lock';
 import image from './image.jpg';
 import API_BASE_URL from '../settings';
 
+// Google Form link for requesting account credentials
+const GOOGLE_FORM_URL = '#'; // Update with your actual Google Form URL
+
 // Create a custom style to override any AppBar that might be in a parent component
 const appBarOverrideStyle = `
   .MuiAppBar-root, header, nav, .navigation-bar, .app-bar, .navbar {
@@ -156,24 +159,36 @@ const Login = () => {
               {error && <Typography color="error">{error}</Typography>}
             </form>
 
-            <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography color="text.secondary" sx={{ fontSize: '1.1rem' }}>
+            <Box sx={{ mt: 4, display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'center' }}>
+              <Typography color="text.secondary" sx={{ fontSize: '1.05rem', textAlign: 'center' }}>
                 Don't have an account?
               </Typography>
-              <Link to="/register" style={{ textDecoration: 'none', width: '100%' }}>
-                <Button 
-                  variant="outlined" 
-                  fullWidth 
-                  sx={{ 
-                    borderRadius: '24px',
-                    padding: '10px',
-                    textTransform: 'none',
-                    fontWeight: 500
-                  }}
-                >
-                  Sign Up
-                </Button>
-              </Link>
+              <Button 
+                variant="outlined" 
+                fullWidth 
+                component="a"
+                href={GOOGLE_FORM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ 
+                  borderRadius: '24px',
+                  padding: '10px',
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '1rem',
+                  borderColor: '#3498db',
+                  color: '#3498db',
+                  '&:hover': {
+                    borderColor: '#2980b9',
+                    backgroundColor: 'rgba(52, 152, 219, 0.05)'
+                  }
+                }}
+              >
+                Request Access via Google Form
+              </Button>
+              <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', lineHeight: 1.4 }}>
+                Account registration is closed. Please submit the request form to receive your login credentials.
+              </Typography>
             </Box>
           </Box>
         </Grid>
