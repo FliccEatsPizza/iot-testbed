@@ -8,6 +8,7 @@ import AddGateway from './pages/AddGateway';
 import JobMonitoring from './pages/JobMonitoring';
 import JobGroupDetails from './pages/JobGroupDetails';
 import Dashboard from './pages/Dashboard';
+import EducationalLabs from './pages/EducationalLabs';
 
 // Navigation component that highlights the current page
 function Navigation() {
@@ -17,6 +18,7 @@ function Navigation() {
   // Define navigation links with their paths and display text
   const navLinks = [
     { path: '/dashboard', text: 'Dashboard' },
+    { path: '/experiments', text: 'Educational Labs' },
     { path: '/submit-jobs', text: 'Submit Jobs' },
     { path: '/files', text: 'Files' },
     { path: '/add-gateway', text: 'Add Gateway' },
@@ -76,6 +78,7 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Navigate to="/login" replace />} />
+        <Route path="/experiments" element={<EducationalLabs />} />
         <Route path="/submit-jobs" element={<JobSubmission />} />
         <Route path="/files" element={<FileManagement />} />
         <Route path="/add-gateway" element={<AddGateway />} />

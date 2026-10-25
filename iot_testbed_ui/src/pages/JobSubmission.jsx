@@ -28,6 +28,8 @@ import {
   Send as SendIcon,
   Build as BuildIcon,
   Group as GroupIcon,
+  School as SchoolIcon,
+  ArrowForward as ArrowForwardIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
@@ -216,6 +218,45 @@ const JobSubmission = () => {
           </Typography>
 
           <Divider sx={{ mb: 4 }} />
+
+          {/* Quick Educational Labs Banner */}
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 4,
+              p: 2,
+              px: 3,
+              bgcolor: 'rgba(46, 204, 113, 0.1)',
+              border: '1px solid #2ecc71',
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 2
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <SchoolIcon sx={{ color: '#27ae60', fontSize: 28 }} />
+              <Box>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ color: '#27ae60' }}>
+                  Looking for pre-built educational experiments?
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Launch Hello World, UDP Client-Server, or NullNet Radio with a single click.
+                </Typography>
+              </Box>
+            </Box>
+            <Button
+              component={Link}
+              to="/experiments"
+              variant="contained"
+              endIcon={<ArrowForwardIcon />}
+              sx={{ bgcolor: '#27ae60', '&:hover': { bgcolor: '#219653' }, textTransform: 'none', fontWeight: 'bold' }}
+            >
+              Explore Educational Labs
+            </Button>
+          </Paper>
 
           {loading ? (
             <Box display="flex" justifyContent="center" my={4}>

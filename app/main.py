@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import asyncio
 import os
 
-from .api import devices, gateways, job_groups, jobs, auth, files
+from .api import devices, gateways, job_groups, jobs, auth, files, presets
 from .models.models import Base
 from .database import engine
 from .queue.redis_client import redis_client
@@ -48,7 +48,8 @@ api_routers = [
     job_groups.router,
     jobs.router,
     auth.router,
-    files.router
+    files.router,
+    presets.router
 ]
 
 for router in api_routers:
