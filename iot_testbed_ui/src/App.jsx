@@ -84,11 +84,6 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
       
-      <footer style={{ textAlign: 'center', padding: '1em', background: '#f1f1f1', marginTop: '2em', position: 'fixed', bottom: 0, width: '100%' }}>
-        <Typography variant="body2" color="textSecondary">
-          © 2023 IoT Testbed. All rights reserved. | <Link to="/privacy-policy">Privacy Policy</Link>
-        </Typography>
-      </footer>
     </Router>
   );
 }

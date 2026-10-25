@@ -24,6 +24,10 @@ import {
   Breadcrumbs,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -34,6 +38,10 @@ import {
   List as ListIcon,
   Info as InfoIcon,
   Download as DownloadIcon,
+  Visibility as VisibilityIcon,
+  ContentCopy as ContentCopyIcon,
+  Close as CloseIcon,
+  Description as DescriptionIcon,
 } from '@mui/icons-material';
 import axios from 'axios';
 import API_BASE_URL from '../settings';
@@ -46,6 +54,13 @@ const JobGroupDetails = () => {
   const [jobLogs, setJobLogs] = useState({});
   const [checkingLogs, setCheckingLogs] = useState({});
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
+  const [viewLogDialog, setViewLogDialog] = useState({
+    open: false,
+    jobId: null,
+    deviceId: null,
+    content: '',
+    loading: false
+  });
   const navigate = useNavigate();
 
   const fetchJobGroupDetails = async () => {
@@ -166,6 +181,48 @@ const JobGroupDetails = () => {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const openViewLog = async (jobId, deviceId) => {
+    setViewLogDialog({
+      open: true,
+      jobId,
+      deviceId,
+      content: '',
+      loading: true
+    });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/log/download`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to load log: ${response.statusText}`);
+      }
+      const text = await response.text();
+      setViewLogDialog(prev => ({
+        ...prev,
+        content: text || '(Log file is empty)',
+        loading: false
+      }));
+    } catch (err) {
+      setViewLogDialog(prev => ({
+        ...prev,
+        content: `Error loading log: ${err.message}`,
+        loading: false
+      }));
+    }
+  };
+
+  const copyLogToClipboard = () => {
+    if (viewLogDialog.content) {
+      navigator.clipboard.writeText(viewLogDialog.content);
+      setSnackbar({
+        open: true,
+        message: 'Log copied to clipboard',
+        severity: 'success'
+      });
+    }
+  };
+
   const getStatusChip = (status) => {
     let color = 'default';
 
@@ -221,7 +278,7 @@ const JobGroupDetails = () => {
       </AppBar>
 
       {/* Main content */}
-      <Container maxWidth="lg">
+      <Container maxWidth="lg" sx={{ pb: 6 }}>
         <Paper 
           elevation={3} 
           sx={{ 
@@ -408,23 +465,46 @@ const JobGroupDetails = () => {
                             {formatDate(job.completed_at)}
                           </TableCell>
                           <TableCell align="center">
-                            {/* Show download button for logs if logs exist */}
                             {checkingLogs[job.id] ? (
                               <CircularProgress size={20} />
                             ) : jobLogs[job.id] ? (
-                              <Tooltip title="Download Log">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => downloadJobLog(job.id)}
-                                  sx={{ 
-                                    color: '#3498db',
-                                    '&:hover': {
-                                      backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                                    }
-                                  }}
-                                >
-                                  <DownloadIcon />
-                                </IconButton>
+                              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                                <Tooltip title="View Log">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => openViewLog(job.id, job.device_id)}
+                                    sx={{ 
+                                      color: '#2ecc71',
+                                      '&:hover': {
+                                        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                      }
+                                    }}
+                                  >
+                                    <VisibilityIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Download Log">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => downloadJobLog(job.id)}
+                                    sx={{ 
+                                      color: '#3498db',
+                                      '&:hover': {
+                                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                      }
+                                    }}
+                                  >
+                                    <DownloadIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Box>
+                            ) : job.status.toLowerCase() === 'completed' ? (
+                              <Tooltip title="No log file available">
+                                <span>
+                                  <IconButton size="small" disabled sx={{ opacity: 0.35 }}>
+                                    <DescriptionIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             ) : null}
                             
@@ -438,7 +518,7 @@ const JobGroupDetails = () => {
                                     '&:hover': {
                                       backgroundColor: 'rgba(52, 152, 219, 0.1)',
                                     },
-                                    ml: jobLogs[job.id] ? 1 : 0
+                                    ml: 1
                                   }}
                                 >
                                   <DownloadIcon />
@@ -462,26 +542,77 @@ const JobGroupDetails = () => {
           )}
         </Paper>
       </Container>
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          width: '100%',
-          bgcolor: 'white',
-          pb: 2,
-          pt: 1
-        }}
+
+      {/* Log Viewer Dialog */}
+      <Dialog
+        open={viewLogDialog.open}
+        onClose={() => setViewLogDialog(prev => ({ ...prev, open: false }))}
+        maxWidth="md"
+        fullWidth
       >
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Divider sx={{ width: '20%' }} />
-        </Box>
-        <Box sx={{ mt: -1, py: 2, color: '#2c3e50', textAlign: 'center' }}>
-          <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif', color: '#d3d3d3' }}>
-            &copy; {new Date().getFullYear()} Job Management System. All rights reserved.
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2c3e50', color: 'white', py: 1.5 }}>
+          <Typography variant="h6" sx={{ fontSize: '1.05rem', fontWeight: 'bold' }}>
+            Job #{viewLogDialog.jobId} Logs (Device #{viewLogDialog.deviceId})
           </Typography>
-        </Box>
-      </Box>
+          <IconButton size="small" onClick={() => setViewLogDialog(prev => ({ ...prev, open: false }))} sx={{ color: 'white' }}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 2, backgroundColor: '#0d1117' }}>
+          {viewLogDialog.loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress sx={{ color: '#58a6ff' }} />
+            </Box>
+          ) : (
+            <Box
+              component="pre"
+              sx={{
+                m: 0,
+                p: 2,
+                color: '#7ee787',
+                backgroundColor: '#161b22',
+                borderRadius: 1,
+                fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                fontSize: '0.85rem',
+                lineHeight: 1.5,
+                maxHeight: '60vh',
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all'
+              }}
+            >
+              {viewLogDialog.content}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1, backgroundColor: '#0d1117', borderTop: '1px solid #30363d' }}>
+          <Button
+            startIcon={<ContentCopyIcon />}
+            onClick={copyLogToClipboard}
+            disabled={viewLogDialog.loading || !viewLogDialog.content}
+            size="small"
+            sx={{ color: '#c9d1d9' }}
+          >
+            Copy
+          </Button>
+          <Button
+            startIcon={<DownloadIcon />}
+            onClick={() => downloadJobLog(viewLogDialog.jobId)}
+            disabled={viewLogDialog.loading || !viewLogDialog.content}
+            size="small"
+            sx={{ color: '#58a6ff' }}
+          >
+            Download
+          </Button>
+          <Button
+            onClick={() => setViewLogDialog(prev => ({ ...prev, open: false }))}
+            size="small"
+            sx={{ color: '#8b949e' }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Notification Snackbar */}
       <Snackbar 

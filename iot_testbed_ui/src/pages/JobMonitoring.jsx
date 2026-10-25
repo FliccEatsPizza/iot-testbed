@@ -292,26 +292,6 @@ const JobMonitoring = () => {
           )}
         </Paper>
       </Container>
-      <Box
-              sx={{
-                position: 'fixed',
-                bottom: 0,
-                left: 0,
-                width: '100%',
-                bgcolor: 'white',
-                pb: 2,
-                pt: 1
-              }}
-            >
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Divider sx={{ width: '20%' }} />
-              </Box>
-              <Box sx={{ mt: -1, py: 2, color: '#2c3e50', textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ fontFamily: 'Arial, sans-serif', color: '#d3d3d3' }}>
-                  &copy; {new Date().getFullYear()} Job Management System. All rights reserved.
-                </Typography>
-              </Box>
-            </Box>
     </Box>
   );
 };

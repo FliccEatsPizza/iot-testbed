@@ -45,6 +45,7 @@ class TunslipManager:
         Returns the discovered Border Router IPv6 address, or None if timeout/error.
         """
         self.tun_prefix = prefix
+        self.stdout_lines = []
         binary = self.find_tunslip6_binary()
         
         # tunslip6 command: sudo tunslip6 -s <port> -B <baudrate> <prefix>
@@ -235,6 +236,10 @@ class TunslipManager:
 
         logger.info(f"Discovery completed with {len(discovered_nodes)} nodes found (fallback)")
         return list(discovered_nodes)
+
+    def get_logs(self) -> str:
+        """Returns all captured stdout lines as a single string."""
+        return "\n".join(self.stdout_lines)
 
     async def stop_tunslip(self):
         """Gracefully stops tunslip6 process"""

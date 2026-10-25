@@ -181,41 +181,31 @@ async def handle_job_notification(job_data: dict):
             print_status(job_id, device_id, f"🚀 Starting job processing [type={dtype}]")
 
             # -------------------------------------------------------
-            # Detect if this physical job is a border-router firmware
-            # by inspecting zip content (rpl-border-router Makefile).
-            # This replaces the old `border_router` device type.
+            # Detect if this physical job is genuinely a border-router firmware
+            # (e.g. includes rpl-border-router service or named border-router).
+            # Generic communication nodes (like udp-server.c) are standard physical nodes.
             # -------------------------------------------------------
             job_dir = f"./downloads/{job_id}"
             is_border_router_firmware = False
-            if os.path.isdir(job_dir):
-                for fname in os.listdir(job_dir):
-                    if fname.lower() == "makefile":
-                        try:
-                            with open(os.path.join(job_dir, fname), "r", errors="ignore") as mf:
-                                content = mf.read()
-                            if "rpl-border-router" in content or "border_router" in content.lower():
-                                is_border_router_firmware = True
-                                break
-                        except Exception:
-                            pass
-                # Also check sub-dirs for a Makefile containing rpl-border-router
-                if not is_border_router_firmware:
-                    for root, dirs, files in os.walk(job_dir):
-                        for fname in files:
-                            if fname.lower() == "makefile":
-                                try:
-                                    with open(os.path.join(root, fname), "r", errors="ignore") as mf:
-                                        content = mf.read()
-                                    if "rpl-border-router" in content or "border_router" in content.lower():
-                                        is_border_router_firmware = True
-                                        break
-                                except Exception:
-                                    pass
-                            elif "border" in fname.lower() or (fname.endswith(".c") and "root_start" in open(os.path.join(root, fname), "r", errors="ignore").read()):
-                                is_border_router_firmware = True
-                                break
-                        if is_border_router_firmware:
+            if dtype == 'border_router':
+                is_border_router_firmware = True
+            elif os.path.isdir(job_dir):
+                for root, dirs, files in os.walk(job_dir):
+                    for fname in files:
+                        if fname.lower() == "makefile":
+                            try:
+                                with open(os.path.join(root, fname), "r", errors="ignore") as mf:
+                                    content = mf.read()
+                                if "rpl-border-router" in content or "border_router" in content.lower():
+                                    is_border_router_firmware = True
+                                    break
+                            except Exception:
+                                pass
+                        elif fname.lower() in ["border-router.c", "border_router.c", "rpl-border-router.c"]:
+                            is_border_router_firmware = True
                             break
+                    if is_border_router_firmware:
+                        break
 
             if is_border_router_firmware:
                 g_state["has_border_router"] = True
@@ -263,7 +253,17 @@ async def handle_job_notification(job_data: dict):
 
                 # Keep border router running for the duration of the group experiment
                 await asyncio.sleep(180)
+                
+                # Retrieve and upload border router logs from tunslip6
+                br_logs = tunslip_manager.get_logs()
                 await tunslip_manager.stop_tunslip()
+                
+                if br_logs:
+                    print_status(job_id, device_id, "📝 Uploading border router logs to server...")
+                    await upload_logs_from_string(job_id, br_logs)
+                else:
+                    print_status(job_id, device_id, "⚠️ Warning: No border router logs collected from tunslip6")
+                    
                 # Signal other jobs in the group that border router is stopping
                 g_state["group_done"].set()
                 # Reset border router dongle to silent idle firmware
@@ -346,6 +346,14 @@ async def handle_job_notification(job_data: dict):
             print_status(message=f"🔴 Invalid job format: {str(e)}")
         except Exception as e:
             print_status(job_id, device_id, f"🔴 Job processing failed: {str(e)}")
+            if is_border_router_firmware:
+                try:
+                    br_logs = tunslip_manager.get_logs()
+                    await tunslip_manager.stop_tunslip()
+                    if br_logs:
+                        await upload_logs_from_string(job_id, br_logs)
+                except Exception:
+                    pass
             if dtype != 'sandbox':
                 try:
                     await reset_device_to_idle(job_id, device_id)
