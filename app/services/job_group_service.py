@@ -51,6 +51,14 @@ class JobGroupService:
             raise Exception(str(e))
         
         for job in db_job_group.jobs:
+            # Clean up any stale log file from a previous database lifecycle with this job ID
+            stale_log = os.path.join(settings.LOGS_DIR, f"{job.id}.txt")
+            if os.path.exists(stale_log):
+                try:
+                    os.remove(stale_log)
+                except Exception:
+                    pass
+
             device = device_map[job.device_id]
             gateway_id = device.gateway_id
             notification = {

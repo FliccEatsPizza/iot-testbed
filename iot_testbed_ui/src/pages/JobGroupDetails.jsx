@@ -95,8 +95,12 @@ const JobGroupDetails = () => {
     try {
       setCheckingLogs(prev => ({ ...prev, [jobId]: true }));
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/jobs/${jobId}/log`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await axios.get(`${API_BASE_URL}/jobs/${jobId}/log?t=${Date.now()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
       });
       
       setJobLogs(prev => ({ 
@@ -115,10 +119,13 @@ const JobGroupDetails = () => {
       const token = localStorage.getItem('token');
       
       // Using fetch for direct download handling
-      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/log/download`, {
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/log/download?t=${Date.now()}`, {
         headers: { 
-          Authorization: `Bearer ${token}` 
-        }
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store'
       });
       
       if (!response.ok) {
@@ -191,8 +198,13 @@ const JobGroupDetails = () => {
     });
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/log/download`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/log/download?t=${Date.now()}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
+        cache: 'no-store'
       });
       if (!response.ok) {
         throw new Error(`Failed to load log: ${response.statusText}`);

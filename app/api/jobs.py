@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -123,9 +123,14 @@ async def upload_job_logs(
 @router.get("/{job_id}/log")
 def check_job_log(
     job_id: int,
+    res: Response,
     db: Session = Depends(get_db),
     current_user: UserSchema = Depends(get_current_user_dependency),
 ):
+    res.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    res.headers["Pragma"] = "no-cache"
+    res.headers["Expires"] = "0"
+
     # fetch job and verify ownership
     job = JobService.get_job_service(job_id, db)
     if job.group.user_id != current_user.id:
@@ -159,5 +164,10 @@ def download_job_log(
     return FileResponse(
         path=log_path,
         media_type="text/plain",
-        filename=f"{job_id}.txt"
+        filename=f"{job_id}.txt",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
     )
