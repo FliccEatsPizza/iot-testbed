@@ -1,7 +1,7 @@
 import os
 import shutil
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
