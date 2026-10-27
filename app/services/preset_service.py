@@ -217,26 +217,42 @@ class PresetService:
         return preset
 
     @staticmethod
-    def _ensure_preset_file(db: Session, user_id: int, filename: str, filepath: str) -> int:
+    def _ensure_preset_file(db: Session, user_id: int, filename: str, filepath: str, makefile_path: Optional[str] = None) -> int:
         """
-        Ensures the preset source file exists in the uploads directory and is recorded in the File table.
+        Ensures the preset source file (bundled with its Makefile in a .zip if available)
+        exists in the uploads directory and is recorded in the File table.
         Returns the file_id.
         """
         upload_dir = os.path.join(settings.UPLOAD_DIR, "presets")
         os.makedirs(upload_dir, exist_ok=True)
-        dest_path = os.path.join(upload_dir, filename)
 
-        if not os.path.exists(dest_path) and os.path.exists(filepath):
-            shutil.copyfile(filepath, dest_path)
+        # If a Makefile exists for this preset, bundle as a zip archive so the Gateway
+        # always compiles with the preset's tested configuration (e.g. MAKE_NET_NULLNET)
+        if makefile_path and os.path.exists(makefile_path):
+            stem = os.path.splitext(filename)[0]
+            zip_filename = f"{stem}.zip"
+            dest_path = os.path.join(upload_dir, zip_filename)
+
+            import zipfile
+            with zipfile.ZipFile(dest_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.write(filepath, arcname=filename)
+                zf.write(makefile_path, arcname="Makefile")
+
+            target_filename = zip_filename
+        else:
+            target_filename = filename
+            dest_path = os.path.join(upload_dir, filename)
+            if not os.path.exists(dest_path) and os.path.exists(filepath):
+                shutil.copyfile(filepath, dest_path)
 
         # Check if file record already exists for this path
-        existing_file = db.query(File).filter(File.filename == filename, File.path == dest_path).first()
+        existing_file = db.query(File).filter(File.filename == target_filename, File.path == dest_path).first()
         if existing_file:
             return existing_file.id
 
         # Create new File record
         new_file = File(
-            filename=filename,
+            filename=target_filename,
             path=dest_path,
             user_id=user_id,
             created_at=datetime.now(timezone.utc)
@@ -294,10 +310,11 @@ class PresetService:
             role_id = item.get("role", "node")
             target_filename = role_to_file.get(role_id, default_file)
             source_path = preset["code_files"].get(target_filename)
+            makefile_path = preset["code_files"].get("Makefile")
             if not source_path or not os.path.exists(source_path):
                 raise HTTPException(status_code=500, detail=f"Preset file {target_filename} not found on server")
 
-            file_id = PresetService._ensure_preset_file(db, user_id, target_filename, source_path)
+            file_id = PresetService._ensure_preset_file(db, user_id, target_filename, source_path, makefile_path)
             jobs_payload.append(JobCreate(
                 device_id=dev_id,
                 source_file_id=file_id
