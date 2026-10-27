@@ -79,10 +79,13 @@ const JobGroupDetails = () => {
       setError('');
       setLoading(false);
       
-      // Check log availability for each job
+      // Check log availability only for finished jobs
       if (response.data && response.data.jobs) {
         response.data.jobs.forEach(job => {
-          checkJobLogExists(job.id);
+          const s = (job.status || '').toLowerCase();
+          if (s === 'completed' || s === 'failed') {
+            checkJobLogExists(job.id);
+          }
         });
       }
     } catch (err) {
@@ -479,7 +482,7 @@ const JobGroupDetails = () => {
                           <TableCell align="center">
                             {checkingLogs[job.id] ? (
                               <CircularProgress size={20} />
-                            ) : jobLogs[job.id] ? (
+                            ) : (((job.status || '').toLowerCase() === 'completed' || (job.status || '').toLowerCase() === 'failed') && jobLogs[job.id]) ? (
                               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
                                 <Tooltip title="View Log">
                                   <IconButton

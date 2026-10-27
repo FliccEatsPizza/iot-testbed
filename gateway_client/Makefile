@@ -45,7 +45,7 @@ build:
 		mkdir -p $(SRC_DIR)/build; \
 		echo "CONTIKI_PROJECT = $$(basename $$(find $(SRC_DIR) -maxdepth 1 -name "*.c" | head -1 | sed 's/\.c$$//g'))" > $(SRC_DIR)/build/Makefile; \
 		echo "all: \$$(CONTIKI_PROJECT)" >> $(SRC_DIR)/build/Makefile; \
-		if grep -q "root_start" $(SRC_DIR)/*.c 2>/dev/null || echo "$(SRC_DIR)" | grep -qi "border"; then \
+		if echo "$(SRC_DIR)" | grep -qi "border" || find $(SRC_DIR) -maxdepth 1 -name "*border*.c" 2>/dev/null | grep -q .; then \
 			echo "MODULES += os/services/rpl-border-router" >> $(SRC_DIR)/build/Makefile; \
 			echo "Added RPL Border Router module to build"; \
 		fi; \

@@ -51,7 +51,11 @@ class RedisClient:
             self.is_connected = False
     
     async def push_job(self, gateway_id: int, job_data: Dict[str, Any]):
-        if not self._redis: return
+        if self._redis is None:
+            await self.init()
+        if not self._redis:
+            logger.error("Failed to push job: Redis connection not available")
+            return
         try:
             queue_key = f"gateway:{gateway_id}:jobs"
             await self._redis.lpush(queue_key, json.dumps(job_data))
@@ -59,6 +63,8 @@ class RedisClient:
             logger.error(f"Error pushing job to Redis: {e}")
     
     async def get_job(self, gateway_id: int) -> Optional[Dict[str, Any]]:
+        if self._redis is None:
+            await self.init()
         if not self._redis: return None
         try:
             queue_key = f"gateway:{gateway_id}:jobs"
@@ -71,6 +77,8 @@ class RedisClient:
         return None
 
     async def publish_status(self, job_id: int, status: str, message: str):
+        if self._redis is None:
+            await self.init()
         if not self._redis: return
         try:
             channel = f"job:{job_id}:status"
@@ -82,7 +90,11 @@ class RedisClient:
             logger.error(f"Error publishing status to Redis: {e}")
 
     async def push_download_notification(self, gateway_id: int, notification: Dict[str, Any]):
-        if not self._redis: return
+        if self._redis is None:
+            await self.init()
+        if not self._redis:
+            logger.error("Failed to push download notification: Redis connection not available")
+            return
         try:
             queue_key = f"gateway:{gateway_id}:download_notifications"
             await self._redis.lpush(queue_key, json.dumps(notification))

@@ -191,6 +191,8 @@ const EducationalLabs = () => {
   };
 
   const handleLaunchExperiment = async () => {
+    if (activeModal.submitting) return; // Prevent double-clicks / concurrent submissions
+
     const { presetId, groupName, details, selectedDevices, serverDevice, clientDevices } = activeModal;
     if (!details) return;
 
@@ -229,6 +231,8 @@ const EducationalLabs = () => {
       });
 
       const newGroup = res.data;
+      // Close modal and navigate immediately to the live job group monitoring page
+      setActiveModal(prev => ({ ...prev, open: false, submitting: false }));
       navigate(`/job-groups/${newGroup.id}`);
     } catch (err) {
       console.error('Launch failed:', err);

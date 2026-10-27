@@ -136,6 +136,13 @@ def check_job_log(
     if job.group.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not allowed to view this log")
 
+    # If job has not reached a terminal state (completed/failed), do not surface logs
+    if job.status not in (JobStatus.completed, JobStatus.failed):
+        return {
+            "exists": False,
+            "path": None
+        }
+
     # determine file path
     log_path = os.path.join(settings.LOGS_DIR, f"{job_id}.txt")
     exists = os.path.isfile(log_path)
@@ -155,6 +162,9 @@ def download_job_log(
     job = JobService.get_job_service(job_id, db)
     if job.group.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not allowed to download this log")
+
+    if job.status not in (JobStatus.completed, JobStatus.failed):
+        raise HTTPException(status_code=400, detail="Job has not finished running yet")
 
     # locate and stream the file
     log_path = os.path.join(settings.LOGS_DIR, f"{job_id}.txt")

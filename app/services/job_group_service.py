@@ -1,3 +1,4 @@
+import os
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from fastapi import BackgroundTasks
@@ -5,6 +6,7 @@ from fastapi import BackgroundTasks
 from ..models.models import JobGroup, Job, Device, JobStatus, DeviceStatus
 from ..schemas.schemas import JobGroupCreate
 from ..queue.redis_client import redis_client
+from ..config import settings
 
 class JobGroupService:
 
