@@ -8,7 +8,7 @@ import serial.tools.list_ports
 # Configuration
 from config import SERVER_URL, API_BASE_URL, GATEWAY_ID
 DEVICE_ENDPOINT = f"{API_BASE_URL}/devices"
-DB_PATH = "gateway_devices.db"  # SQLite database file
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gateway_devices.db")
 
 def get_device_port(device_id: int) -> str:
     with sqlite3.connect(DB_PATH) as conn:
@@ -41,7 +41,11 @@ def get_connected_device_status():
 
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            cur = conn.execute("SELECT device_id, port, device_type FROM devices")
+            cur = conn.execute("PRAGMA table_info(devices)")
+            cols = [c[1] for c in cur.fetchall()]
+            has_dtype = "device_type" in cols
+            query = "SELECT device_id, port, device_type FROM devices" if has_dtype else "SELECT device_id, port, 'physical' FROM devices"
+            cur = conn.execute(query)
             for dev_id, port, dtype in cur.fetchall():
                 if dtype == 'sandbox':
                     active_ids.append(dev_id)
@@ -50,8 +54,8 @@ def get_connected_device_status():
                         active_ids.append(dev_id)
                     else:
                         inactive_ids.append(dev_id)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Error checking connected devices: {e}")
 
     return active_ids, inactive_ids
 
