@@ -166,6 +166,75 @@ PRESETS: Dict[str, Dict[str, Any]] = {
             "nullnet-broadcast.c": os.path.join(PRESETS_DIR, "nullnet", "nullnet-broadcast.c"),
             "Makefile": os.path.join(PRESETS_DIR, "nullnet", "Makefile")
         }
+    },
+    "dht11-cloud": {
+        "id": "dht11-cloud",
+        "title": "DHT11 Sensor Telemetry & Cloud MQTT Streaming",
+        "category": "Cloud IoT & MQTT",
+        "difficulty": "Intermediate",
+        "duration": "~1-2 minutes",
+        "min_nodes": 1,
+        "type": "uniform",
+        "target_gateway_hint": 2,
+        "cloud_console_url": "http://www.hivemq.com/demos/websocket-client/",
+        "mqtt_config": {
+            "broker_host": "broker.hivemq.com",
+            "broker_port": 1883,
+            "websocket_port": 8000,
+            "topic": "iot-testbed/dht11/telemetry"
+        },
+        "overview": (
+            "Acquires real-time ambient temperature and humidity from a physical DHT11 sensor "
+            "wired to Port 1 Pin 15 (P1.15) of an nRF52840 node on Gateway 2 (172.28.8.11). "
+            "Telemetry is formatted and dispatched live to the free public HiveMQ Cloud MQTT Broker."
+        ),
+        "theory": (
+            "### Physical Sensing & Edge-to-Cloud Telemetry\n\n"
+            "- **DHT11 One-Wire Protocol:** Communicates over a single bidirectional data wire using precise microsecond timing. "
+            "A start signal pulls the bus low for >=18ms, followed by 40 bits of serial data (humidity integer + decimal, "
+            "temperature integer + decimal, and a checksum byte).\n"
+            "- **Contiki-NG Sensor Driver (`dht11_sensor`):** Abstracted through Contiki-NG's sensor API: "
+            "`dht11_sensor.configure(DHT11_CONFIGURE_GPIO_PORT, 1);` and `dht11_sensor.configure(DHT11_CONFIGURE_GPIO_PIN, 15);`. "
+            "`SENSORS_ACTIVATE(dht11_sensor)` reads the hardware bus via high-precision `rtimer` and validates checksum.\n"
+            "- **Edge-to-Cloud MQTT Pipeline:** Low-power microcontrollers (like nRF52840 dongles) lack onboard Wi-Fi. "
+            "The node outputs structured telemetry over USB CDC-ACM. The Raspberry Pi Edge Gateway inspects serial data and "
+            "instantly bridges it to the HiveMQ Cloud Broker (`broker.hivemq.com:1883`) via MQTT.\n"
+            "- **Live Cloud Subscription:** Anyone can subscribe to topic `iot-testbed/dht11/telemetry` via WebSockets "
+            "to observe real-time ambient data on a browser, mobile dashboard, or cloud analytics server without signing up."
+        ),
+        "instructions": (
+            "1. Select the **nRF52840 node with DHT11** (located on **Gateway 2 / 172.28.8.11** at **P1.15**).\n"
+            "2. Open the **[HiveMQ Web Client](http://www.hivemq.com/demos/websocket-client/)** in a new browser tab.\n"
+            "3. Click **Connect** (Host: `broker.hivemq.com`, Port: `8000` or `8884`).\n"
+            "4. Under **Subscriptions**, click **Add New Topic Subscription** and enter: `iot-testbed/dht11/telemetry`.\n"
+            "5. Click **'Launch Experiment'** below to flash the node and begin streaming live sensor telemetry!"
+        ),
+        "expected_output": (
+            "====================================================\n"
+            "🌐 DHT11 Environmental Telemetry & Cloud MQTT Lab\n"
+            "📍 GPIO Config: Port 1, Pin 15 (P1.15)\n"
+            "📡 Cloud Topic: iot-testbed/dht11/telemetry\n"
+            "⏱️ Sampling Rate: every 4 seconds\n"
+            "====================================================\n"
+            "🌡️ [Sample #1] Temp: 24°C | 💧 Humidity: 52%\n"
+            "MQTT:PUBLISH topic=\"iot-testbed/dht11/telemetry\" payload={\"sample\":1,\"temperature\":24,\"humidity\":52,\"status\":\"OK\"}\n"
+            "📡 [MQTT-CLOUD] Dispatched to broker.hivemq.com:1883 -> iot-testbed/dht11/telemetry\n"
+            "🌡️ [Sample #2] Temp: 24°C | 💧 Humidity: 52%\n"
+            "📡 [MQTT-CLOUD] Dispatched to broker.hivemq.com:1883 -> iot-testbed/dht11/telemetry"
+        ),
+        "roles": [
+            {
+                "id": "node",
+                "name": "DHT11 Sensor Node (Gateway 2)",
+                "description": "Target nRF52840 node wired to DHT11 on Port 1, Pin 15.",
+                "file": "dht11-cloud.c"
+            }
+        ],
+        "code_files": {
+            "dht11-cloud.c": os.path.join(PRESETS_DIR, "dht11_cloud", "dht11-cloud.c"),
+            "Makefile": os.path.join(PRESETS_DIR, "dht11_cloud", "Makefile"),
+            "project-conf.h": os.path.join(PRESETS_DIR, "dht11_cloud", "project-conf.h")
+        }
     }
 }
 
@@ -185,6 +254,9 @@ class PresetService:
                 "min_nodes": p["min_nodes"],
                 "type": p["type"],
                 "overview": p["overview"],
+                "cloud_console_url": p.get("cloud_console_url"),
+                "mqtt_config": p.get("mqtt_config"),
+                "target_gateway_hint": p.get("target_gateway_hint"),
                 "roles": [
                     {
                         "id": r["id"],
@@ -237,6 +309,12 @@ class PresetService:
             with zipfile.ZipFile(dest_path, "w", zipfile.ZIP_DEFLATED) as zf:
                 zf.write(filepath, arcname=filename)
                 zf.write(makefile_path, arcname="Makefile")
+                # Also include any project headers (e.g. project-conf.h)
+                src_dir = os.path.dirname(filepath)
+                if os.path.isdir(src_dir):
+                    for item in os.listdir(src_dir):
+                        if item.endswith(".h"):
+                            zf.write(os.path.join(src_dir, item), arcname=item)
 
             target_filename = zip_filename
         else:

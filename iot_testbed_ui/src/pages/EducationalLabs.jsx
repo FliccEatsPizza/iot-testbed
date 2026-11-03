@@ -42,7 +42,9 @@ import {
   Computer as ComputerIcon,
   Group as GroupIcon,
   Build as BuildIcon,
-  ArrowForward as ArrowForwardIcon
+  ArrowForward as ArrowForwardIcon,
+  CloudQueue as CloudIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -127,6 +129,15 @@ const EducationalLabs = () => {
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const defaultName = `${preset ? preset.title : 'Lab'} - ${nowStr}`;
 
+    // Prefer selecting target gateway nodes if preset has target_gateway_hint
+    let initialSelected = [];
+    if (preset?.target_gateway_hint) {
+      const hintDevs = devices.filter(d => d.gateway_id === preset.target_gateway_hint);
+      initialSelected = hintDevs.length > 0 ? [hintDevs[0].id] : (devices.length > 0 ? [devices[0].id] : []);
+    } else {
+      initialSelected = devices.length > 0 ? [devices[0].id] : [];
+    }
+
     setActiveModal({
       open: true,
       presetId,
@@ -135,7 +146,7 @@ const EducationalLabs = () => {
       details: null,
       activeCodeFile: null,
       groupName: defaultName,
-      selectedDevices: devices.length > 0 ? [devices[0].id] : [],
+      selectedDevices: initialSelected,
       serverDevice: devices.length > 0 ? devices[0].id : '',
       clientDevices: devices.length > 1 ? [devices[1].id] : [],
       submitting: false,
@@ -376,11 +387,22 @@ const EducationalLabs = () => {
                 >
                   <CardContent sx={{ flexGrow: 1, pb: 1 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                      <Chip
-                        label={preset.category}
-                        size="small"
-                        sx={{ bgcolor: '#ecf0f1', color: '#2c3e50', fontWeight: 'bold' }}
-                      />
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                        <Chip
+                          label={preset.category}
+                          size="small"
+                          sx={{ bgcolor: '#ecf0f1', color: '#2c3e50', fontWeight: 'bold' }}
+                        />
+                        {preset.cloud_console_url && (
+                          <Chip
+                            icon={<CloudIcon style={{ fontSize: 14 }} />}
+                            label="Cloud MQTT"
+                            size="small"
+                            color="info"
+                            sx={{ fontWeight: 'bold' }}
+                          />
+                        )}
+                      </Box>
                       <Chip
                         label={preset.difficulty}
                         size="small"
@@ -498,6 +520,45 @@ const EducationalLabs = () => {
                     onChange={(e) => setActiveModal(prev => ({ ...prev, groupName: e.target.value }))}
                   />
 
+                  {/* CLOUD MQTT CONSOLE BANNER */}
+                  {activeModal.details.cloud_console_url && (
+                    <Paper
+                      elevation={0}
+                      sx={{
+                        p: 2,
+                        bgcolor: '#ebf8fa',
+                        border: '1px solid #bce8f1',
+                        borderRadius: 2
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                          <CloudIcon sx={{ color: '#0288d1', fontSize: 32 }} />
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ color: '#01579b' }}>
+                              Live Cloud MQTT Broker Streaming
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: '#37474f' }}>
+                              Broker: <strong>{activeModal.details.mqtt_config?.broker_host || 'broker.hivemq.com'}</strong> &bull; Topic: <code>{activeModal.details.mqtt_config?.topic || 'iot-testbed/dht11/telemetry'}</code>
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Button
+                          variant="contained"
+                          size="small"
+                          color="info"
+                          endIcon={<OpenInNewIcon fontSize="small" />}
+                          href={activeModal.details.cloud_console_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                        >
+                          Open HiveMQ Web Console
+                        </Button>
+                      </Box>
+                    </Paper>
+                  )}
+
                   {/* UNIFORM NODE SELECTOR */}
                   {activeModal.details.type === 'uniform' && (
                     <Box sx={{ p: 2, bgcolor: '#f8f9fa', borderRadius: 2, border: '1px solid #e9ecef' }}>
@@ -538,9 +599,27 @@ const EducationalLabs = () => {
                                   }
                                   label={
                                     <Box>
-                                      <Typography variant="body2" fontWeight="bold">
-                                        Device #{device.id} ({device.name})
-                                      </Typography>
+                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+                                        <Typography variant="body2" fontWeight="bold">
+                                          Device #{device.id} ({device.name})
+                                        </Typography>
+                                        {device.gateway_id && (
+                                          <Chip
+                                            label={`Gateway ${device.gateway_id}`}
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ height: 18, fontSize: '0.65rem' }}
+                                          />
+                                        )}
+                                        {device.gateway_id === 2 && activeModal.presetId === 'dht11-cloud' && (
+                                          <Chip
+                                            label="DHT11 Sensor Wired (P1.15)"
+                                            color="success"
+                                            size="small"
+                                            sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }}
+                                          />
+                                        )}
+                                      </Box>
                                       <Typography variant="caption" color="text.secondary">
                                         {device.port_number || 'USB CDC ACM'}
                                       </Typography>

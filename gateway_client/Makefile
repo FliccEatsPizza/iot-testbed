@@ -53,6 +53,10 @@ build:
 			echo "MODULES += os/services/rpl-border-router" >> $(SRC_DIR)/build/Makefile; \
 			echo "Added RPL Border Router module to build"; \
 		fi; \
+		if grep -qi "dht11" $(SRC_DIR)/*.c 2>/dev/null; then \
+			echo "MODULES += \$$(CONTIKI_NG_DRIVERS_SENSOR_DIR)/dht11" >> $(SRC_DIR)/build/Makefile; \
+			echo "Added DHT11 sensor module to build"; \
+		fi; \
 		echo "CONTIKI = $(CONTIKI)" >> $(SRC_DIR)/build/Makefile; \
 		echo "include \$$(CONTIKI)/Makefile.include" >> $(SRC_DIR)/build/Makefile; \
 		cp $(SRC_DIR)/*.c $(SRC_DIR)/build/; \

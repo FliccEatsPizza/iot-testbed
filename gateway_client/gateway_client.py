@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 import aiohttp
 import time
 import subprocess
@@ -38,6 +39,24 @@ job_semaphore = asyncio.Semaphore(MAX_CONCURRENT_JOBS)
 # Flash lock: serializes USB DFU flashing across physical dongles so parallel
 # jobs don't cause libusb race conditions during device reset / re-enumeration
 flash_lock = asyncio.Lock()
+
+# Regex pattern to identify structured telemetry output from nodes for cloud MQTT streaming
+MQTT_DIRECTIVE_PATTERN = re.compile(r'MQTT:PUBLISH\s+topic="([^"]+)"\s+payload=(\{.*\})')
+
+async def dispatch_mqtt_publish(topic: str, payload: str):
+    """
+    Non-blocking background helper that dispatches telemetry payloads
+    to the public HiveMQ MQTT broker using mosquitto_pub.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "mosquitto_pub", "-h", "broker.hivemq.com", "-p", "1883", "-t", topic, "-m", payload,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        await asyncio.wait_for(proc.wait(), timeout=3.0)
+    except Exception:
+        pass
 
 # Group-level synchronization state for ordered multi-target execution
 # Structure: group_id -> {
@@ -790,6 +809,16 @@ async def collect_logs(job_id: int, device_id: int):
                         f.flush()
                         print_status(job_id, device_id, f"📄 {decoded}")
                         log_active = True
+
+                        # Check if line contains MQTT cloud publish directive
+                        mqtt_match = MQTT_DIRECTIVE_PATTERN.search(decoded)
+                        if mqtt_match:
+                            topic, payload = mqtt_match.group(1), mqtt_match.group(2)
+                            cloud_msg = f"📡 [MQTT-CLOUD] Dispatched to broker.hivemq.com:1883 -> {topic}"
+                            f.write(cloud_msg + "\n")
+                            f.flush()
+                            print_status(job_id, device_id, cloud_msg)
+                            asyncio.create_task(dispatch_mqtt_publish(topic, payload))
                 except asyncio.TimeoutError:
                     if log_active:
                         print_status(job_id, device_id, "⏳ No data, waiting...")
