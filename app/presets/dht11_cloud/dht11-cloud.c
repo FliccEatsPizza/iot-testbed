@@ -29,87 +29,78 @@
 /*---------------------------------------------------------------------------*/
 static int read_dht11(uint8_t *hum, uint8_t *temp, uint8_t raw[5])
 {
-  uint32_t timeout;
+  uint32_t t;
   int i;
 
   memset(raw, 0, 5);
 
-  /* Configure pin as Open-Drain (S0D1) with internal pull-up and input connected.
-   * Standard '0' drives line firmly to GND.
-   * Disconnect '1' releases line to float up to 3.3V via internal pull-up.
-   * This eliminates pin direction switching and prevents bus fighting. */
-  nrf_gpio_cfg(
-    PIN_NR,
-    NRF_GPIO_PIN_DIR_OUTPUT,
-    NRF_GPIO_PIN_INPUT_CONNECT,
-    NRF_GPIO_PIN_PULLUP,
-    NRF_GPIO_PIN_S0D1,
-    NRF_GPIO_PIN_NOSENSE
-  );
-
   /* Send start signal: pull line LOW for 20ms */
+  nrf_gpio_cfg_output(PIN_NR);
   nrf_gpio_pin_clear(PIN_NR);
   nrf_delay_ms(20);
 
-  /* Disable interrupts before releasing line to prevent context-switch jitter */
+  /* Release line and configure as input with internal pull-up enabled */
+  nrf_gpio_pin_set(PIN_NR);
+  nrf_gpio_cfg_input(PIN_NR, NRF_GPIO_PIN_PULLUP);
+
+  /* Disable interrupts during time-critical bit-bang capture */
   __disable_irq();
 
-  /* Release line HIGH (disconnects output, internal pull-up pulls to 3.3V) */
-  nrf_gpio_pin_set(PIN_NR);
-  nrf_delay_us(30);
-
   /* Phase 1: Wait for DHT11 response - sensor pulls line LOW (within 20-40us) */
-  timeout = 300;
-  while(nrf_gpio_pin_read(PIN_NR) && --timeout) {
+  t = 0;
+  while(nrf_gpio_pin_read(PIN_NR) && t < 500) {
     nrf_delay_us(1);
+    t++;
   }
-  if(!timeout) {
+  if(t >= 500) {
     __enable_irq();
     return -1; /* Timeout waiting for sensor LOW response */
   }
 
   /* Phase 2: Sensor holds line LOW for ~80us, then pulls HIGH */
-  timeout = 300;
-  while(!nrf_gpio_pin_read(PIN_NR) && --timeout) {
+  t = 0;
+  while(!nrf_gpio_pin_read(PIN_NR) && t < 500) {
     nrf_delay_us(1);
+    t++;
   }
-  if(!timeout) {
+  if(t >= 500) {
     __enable_irq();
     return -2; /* Timeout waiting for sensor HIGH response */
   }
 
   /* Phase 3: Sensor holds line HIGH for ~80us, then pulls LOW to start data bits */
-  timeout = 300;
-  while(nrf_gpio_pin_read(PIN_NR) && --timeout) {
+  t = 0;
+  while(nrf_gpio_pin_read(PIN_NR) && t < 500) {
     nrf_delay_us(1);
+    t++;
   }
-  if(!timeout) {
+  if(t >= 500) {
     __enable_irq();
     return -3; /* Timeout waiting for data transmission start */
   }
 
   /* Phase 4: Sample 40 data bits */
   for(i = 0; i < 40; i++) {
-    uint32_t high_duration = 0;
-
     /* Each bit begins with 50us LOW. Wait for line to go HIGH */
-    timeout = 300;
-    while(!nrf_gpio_pin_read(PIN_NR) && --timeout) {
+    t = 0;
+    while(!nrf_gpio_pin_read(PIN_NR) && t < 500) {
       nrf_delay_us(1);
+      t++;
     }
-    if(!timeout) {
+    if(t >= 500) {
       __enable_irq();
       return -4; /* Timeout waiting for bit pulse */
     }
 
     /* Measure duration of HIGH pulse (1us resolution) */
-    while(nrf_gpio_pin_read(PIN_NR) && high_duration < 300) {
+    t = 0;
+    while(nrf_gpio_pin_read(PIN_NR) && t < 500) {
       nrf_delay_us(1);
-      high_duration++;
+      t++;
     }
 
     /* DHT11 bit timing: 26-28us = '0', 70us = '1'. Midpoint threshold = 45us */
-    uint8_t bit = (high_duration > 45) ? 1 : 0;
+    uint8_t bit = (t > 45) ? 1 : 0;
     raw[i / 8] = (raw[i / 8] << 1) | bit;
   }
 
