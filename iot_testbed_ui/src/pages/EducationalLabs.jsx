@@ -131,7 +131,10 @@ const EducationalLabs = () => {
 
     // Prefer selecting target gateway nodes if preset has target_gateway_hint
     let initialSelected = [];
-    if (preset?.target_gateway_hint) {
+    if (presetId === 'dht11-cloud') {
+      const dhtDev = devices.find(d => d.id === 5 || d.name === 'node5');
+      initialSelected = dhtDev ? [dhtDev.id] : (devices.length > 0 ? [devices[0].id] : []);
+    } else if (preset?.target_gateway_hint) {
       const hintDevs = devices.filter(d => d.gateway_id === preset.target_gateway_hint);
       initialSelected = hintDevs.length > 0 ? [hintDevs[0].id] : (devices.length > 0 ? [devices[0].id] : []);
     } else {
@@ -531,7 +534,7 @@ const EducationalLabs = () => {
                         borderRadius: 2
                       }}
                     >
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5, mb: 1.5 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                           <CloudIcon sx={{ color: '#0288d1', fontSize: 32 }} />
                           <Box>
@@ -556,6 +559,15 @@ const EducationalLabs = () => {
                           Open HiveMQ Web Console
                         </Button>
                       </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'rgba(255,255,255,0.7)', borderRadius: 1, border: '1px solid #d1edf2', fontSize: '0.8rem', color: '#0c5460' }}>
+                        <Typography variant="caption" fontWeight="bold" display="block" gutterBottom sx={{ fontSize: '0.8rem' }}>
+                          How to view data on HiveMQ Web Client:
+                        </Typography>
+                        1. Open the HiveMQ Web Console button above and click <strong>"Connect"</strong> (green dot shows connected).<br />
+                        2. Under <strong>Subscriptions</strong>, click <strong>"Add New Topic Subscription"</strong>.<br />
+                        3. Enter Topic: <code>iot-testbed/dht11/telemetry</code> and click <strong>"Subscribe"</strong>.<br />
+                        4. Watch live temperature &amp; humidity JSON packets stream into the <strong>Messages</strong> panel!
+                      </Box>
                     </Paper>
                   )}
 
@@ -565,16 +577,29 @@ const EducationalLabs = () => {
                       <Typography variant="subtitle1" fontWeight="bold" gutterBottom sx={{ color: '#2c3e50' }}>
                         Select Target Nodes
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                        All selected nodes will compile and execute this standalone experiment.
-                      </Typography>
+                      {activeModal.presetId === 'dht11-cloud' ? (
+                        <Alert severity="info" sx={{ mb: 2, fontSize: '0.82rem' }}>
+                          <strong>Target Node Note:</strong> The physical DHT11 sensor is wired to <strong>Device #5 (node5 on Gateway 2)</strong> at Port 1 Pin 15 (P1.15). Please select Device #5 below to sample real physical telemetry.
+                        </Alert>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          All selected nodes will compile and execute this standalone experiment.
+                        </Typography>
+                      )}
 
                       {devices.length === 0 ? (
                         <Alert severity="warning">No physical nodes are currently connected or online.</Alert>
                       ) : (
                         <FormGroup row sx={{ gap: 1 }}>
-                          {devices.map(device => {
+                          {[...devices].sort((a, b) => {
+                            if (activeModal.presetId === 'dht11-cloud') {
+                              if (a.id === 5) return -1;
+                              if (b.id === 5) return 1;
+                            }
+                            return a.id - b.id;
+                          }).map(device => {
                             const isChecked = activeModal.selectedDevices.includes(device.id);
+                            const isSensorDevice = activeModal.presetId === 'dht11-cloud' && (device.id === 5 || device.name === 'node5');
                             return (
                               <Paper
                                 key={device.id}
@@ -585,8 +610,9 @@ const EducationalLabs = () => {
                                   display: 'flex',
                                   alignItems: 'center',
                                   borderRadius: 2,
-                                  bgcolor: isChecked ? 'rgba(46, 204, 113, 0.08)' : 'white',
-                                  borderColor: isChecked ? '#2ecc71' : '#d6dbdf'
+                                  bgcolor: isSensorDevice ? (isChecked ? 'rgba(46, 204, 113, 0.15)' : 'rgba(46, 204, 113, 0.05)') : (isChecked ? 'rgba(52, 152, 219, 0.08)' : 'white'),
+                                  borderColor: isSensorDevice ? '#2ecc71' : (isChecked ? '#3498db' : '#d6dbdf'),
+                                  borderWidth: isSensorDevice ? 2 : 1
                                 }}
                               >
                                 <FormControlLabel
@@ -594,7 +620,7 @@ const EducationalLabs = () => {
                                     <Checkbox
                                       checked={isChecked}
                                       onChange={() => handleUniformDeviceToggle(device.id)}
-                                      color="success"
+                                      color={isSensorDevice ? "success" : "primary"}
                                     />
                                   }
                                   label={
@@ -611,12 +637,20 @@ const EducationalLabs = () => {
                                             sx={{ height: 18, fontSize: '0.65rem' }}
                                           />
                                         )}
-                                        {device.gateway_id === 2 && activeModal.presetId === 'dht11-cloud' && (
+                                        {isSensorDevice && (
                                           <Chip
-                                            label="DHT11 Sensor Wired (P1.15)"
+                                            label="DHT11 Sensor Wired (P1.15) [Recommended]"
                                             color="success"
                                             size="small"
                                             sx={{ height: 18, fontSize: '0.65rem', fontWeight: 'bold' }}
+                                          />
+                                        )}
+                                        {activeModal.presetId === 'dht11-cloud' && !isSensorDevice && (
+                                          <Chip
+                                            label="No Sensor"
+                                            size="small"
+                                            variant="outlined"
+                                            sx={{ height: 18, fontSize: '0.65rem', opacity: 0.6 }}
                                           />
                                         )}
                                       </Box>

@@ -25,19 +25,32 @@ def run_remote(cmd: str, host: str = None):
     finally:
         ssh.close()
 
-def run_remote_python(code: str):
+def run_remote_python(code, host: str = None):
     import base64
-    b64 = base64.b64encode(code.encode('utf-8')).decode('ascii')
+    if isinstance(code, str):
+        code_bytes = code.encode('utf-8', errors='replace')
+    else:
+        code_bytes = code
+    b64 = base64.b64encode(code_bytes).decode('ascii')
     cmd = f"python3 -c \"import base64; exec(base64.b64decode('{b64}').decode('utf-8'))\""
-    return run_remote(cmd)
+    return run_remote(cmd, host=host)
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        if sys.argv[1] == '--py':
-            code = " ".join(sys.argv[2:])
-            sys.exit(run_remote_python(code))
+    host = os.getenv("PI_HOST", "172.28.8.11")
+    args = sys.argv[1:]
+    if len(args) >= 2 and args[0] == '--host':
+        host = args[1]
+        args = args[2:]
+
+    if len(args) > 0:
+        if args[0] == '--stdin':
+            code = sys.stdin.buffer.read()
+            sys.exit(run_remote_python(code, host=host))
+        elif args[0] == '--py':
+            code = " ".join(args[1:])
+            sys.exit(run_remote_python(code, host=host))
         else:
-            command = " ".join(sys.argv[1:])
-            sys.exit(run_remote(command))
+            command = " ".join(args)
+            sys.exit(run_remote(command, host=host))
     else:
-        print("Usage: python pi_ssh.py '<command>' or python pi_ssh.py --py '<code>'")
+        print("Usage: python pi_ssh.py [--host <ip>] '<command>'")
