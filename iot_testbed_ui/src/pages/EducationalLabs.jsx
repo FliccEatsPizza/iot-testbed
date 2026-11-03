@@ -132,7 +132,7 @@ const EducationalLabs = () => {
     // Prefer selecting target gateway nodes if preset has target_gateway_hint
     let initialSelected = [];
     if (presetId === 'dht11-cloud') {
-      const dhtDev = devices.find(d => d.id === 5 || d.name === 'node5');
+      const dhtDev = devices.find(d => d.id === 6 || d.name === 'node6');
       initialSelected = dhtDev ? [dhtDev.id] : (devices.length > 0 ? [devices[0].id] : []);
     } else if (preset?.target_gateway_hint) {
       const hintDevs = devices.filter(d => d.gateway_id === preset.target_gateway_hint);
@@ -579,7 +579,7 @@ const EducationalLabs = () => {
                       </Typography>
                       {activeModal.presetId === 'dht11-cloud' ? (
                         <Alert severity="info" sx={{ mb: 2, fontSize: '0.82rem' }}>
-                          <strong>Target Node Note:</strong> The physical DHT11 sensor is wired to <strong>Device #5 (node5 on Gateway 2)</strong> at Port 1 Pin 15 (P1.15). Please select Device #5 below to sample real physical telemetry.
+                          <strong>Target Node Note:</strong> The physical DHT11 sensor is wired to <strong>Device #6 (node6 on Gateway 2)</strong> at Port 1 Pin 15 (P1.15). Device #6 is selected below by default to sample real physical telemetry.
                         </Alert>
                       ) : (
                         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -593,13 +593,13 @@ const EducationalLabs = () => {
                         <FormGroup row sx={{ gap: 1 }}>
                           {[...devices].sort((a, b) => {
                             if (activeModal.presetId === 'dht11-cloud') {
-                              if (a.id === 5) return -1;
-                              if (b.id === 5) return 1;
+                              if (a.id === 6 || a.name === 'node6') return -1;
+                              if (b.id === 6 || b.name === 'node6') return 1;
                             }
                             return a.id - b.id;
                           }).map(device => {
                             const isChecked = activeModal.selectedDevices.includes(device.id);
-                            const isSensorDevice = activeModal.presetId === 'dht11-cloud' && (device.id === 5 || device.name === 'node5');
+                            const isSensorDevice = activeModal.presetId === 'dht11-cloud' && (device.id === 6 || device.name === 'node6');
                             return (
                               <Paper
                                 key={device.id}
